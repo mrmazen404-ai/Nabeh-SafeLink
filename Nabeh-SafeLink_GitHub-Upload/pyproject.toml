@@ -1,5 +1,5 @@
 [tool.vercel]
-entrypoint = "main.py"
+entrypoint = "main:app"
 
 [tool.vercel.fastapi.static]
 cdn = true
