@@ -1,0 +1,198 @@
+/* ============================================
+   Nabeh SafeLink — Ultra-Slow Sober Circular Security Splash
+   Style Reference: Corporate Cyber Security HUD
+   ============================================ */
+
+.splash-page {
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #133256 0%, #0A2540 100%);
+  color: #FFFFFF;
+  padding: 32px 20px;
+}
+
+/* Background Cyber Grid Pattern */
+.splash-cyber-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(30, 144, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(30, 144, 255, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+/* Content Box */
+.splash-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  max-width: 600px;
+}
+
+/* Scaled Logo Wrapper */
+.splash-logo-wrapper {
+  margin-bottom: 48px;
+  transform: scale(1.3);
+  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.4));
+}
+
+.splash-logo-wrapper .nabeh-logo-title {
+  color: #FFFFFF !important;
+}
+
+.splash-logo-wrapper .nabeh-logo-tagline {
+  color: #9CA3AF !important;
+}
+
+/* Multi-Ring Radar Spinner (Ultra Slow & Majestic 20s/24s) */
+.splash-radar-wrapper {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin-bottom: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.radar-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+
+/* Outer Ring (20s Rotation) */
+.radar-ring-outer {
+  inset: 0;
+  border-top-color: #1E90FF;
+  border-bottom-color: rgba(30, 144, 255, 0.2);
+  animation: radarSpin 20s linear infinite;
+  box-shadow: 0 0 20px rgba(30, 144, 255, 0.15);
+}
+
+/* Middle Counter-Rotating Ring (24s Rotation) */
+.radar-ring-middle {
+  inset: 14px;
+  border-left-color: #16A34A;
+  border-right-color: rgba(22, 163, 74, 0.2);
+  animation: radarSpinReverse 24s linear infinite;
+}
+
+/* Inner Dotted Ring */
+.radar-ring-inner {
+  inset: 28px;
+  border: 1px dashed rgba(30, 144, 255, 0.4);
+  animation: radarPulse 8s ease-in-out infinite;
+}
+
+/* Center Icon */
+.radar-center-icon {
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 10px rgba(30, 144, 255, 0.5));
+}
+
+/* Status Text Block */
+.splash-status-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.splash-status-title {
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 0.3px;
+}
+
+.splash-status-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: #1E90FF;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Footer */
+.splash-footer {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  font-family: 'Inter', sans-serif;
+  color: #6B7280;
+  letter-spacing: 0.5px;
+}
+
+/* Ultra-Slow Majestic Animations */
+@keyframes radarSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes radarSpinReverse {
+  0% { transform: rotate(360deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes radarPulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.02); opacity: 1; }
+}
+
+/* Fade In Entrance */
+.fade-in {
+  animation: splashFadeIn 0.5s ease-out;
+}
+
+@keyframes splashFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile Scaling Adjustments */
+@media (max-width: 480px) {
+  .splash-logo-wrapper {
+    transform: scale(1.1);
+    margin-bottom: 36px;
+  }
+
+  .splash-radar-wrapper {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 28px;
+  }
+
+  .splash-status-title {
+    font-size: 14px;
+  }
+
+  .splash-status-subtitle {
+    font-size: 11px;
+  }
+}

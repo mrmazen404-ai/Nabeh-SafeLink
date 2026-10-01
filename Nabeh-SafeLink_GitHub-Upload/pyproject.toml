@@ -1,0 +1,6 @@
+[tool.vercel]
+entrypoint = "main.py"
+
+[tool.vercel.fastapi.static]
+cdn = true
+exclude = true
