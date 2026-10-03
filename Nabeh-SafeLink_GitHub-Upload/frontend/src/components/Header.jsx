@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { GlobeIcon, MoonIcon, SunIcon } from './Icons';
+import HelpMenu from './HelpMenu';
 
 export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
   const { user, isGuest, logout } = useAuth();
@@ -12,7 +13,12 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const navItems = isGuest
-    ? [{ id: 'scan', label: t('nav.scan'), icon: ShieldIcon }]
+    ? [
+      { id: 'scan', label: t('nav.scan'), icon: ShieldIcon },
+      { id: 'about', label: t('nav.about'), icon: InfoIcon },
+      { id: 'guide', label: t('nav.guide'), icon: ShieldCheckIcon },
+      { id: 'faq', label: t('nav.faq'), icon: InfoIcon },
+    ]
     : [
       { id: 'home', label: t('nav.home'), icon: ShieldIcon },
       { id: 'scan', label: t('nav.scan'), icon: ShieldIcon },
@@ -52,6 +58,7 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
         </nav>
 
           <div className="header-actions">
+          <HelpMenu activeTab={activeTab} setActiveTab={setActiveTab} />
           <button type="button" className="header-preference-btn" onClick={toggleLanguage} aria-label={t('nav.changeLanguage')} title={t('nav.changeLanguage')}><GlobeIcon size={15} /><span>{lang === 'ar' ? 'English' : 'العربية'}</span></button>
           <button type="button" className="header-preference-btn header-theme-btn" onClick={toggleTheme} aria-label={t('auth.toggleTheme')} title={t('auth.toggleTheme')}>{theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}</button>
           {!isGuest && user ? (
@@ -73,7 +80,7 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
           ) : (
             <button
               type="button"
-              onClick={() => onNavigateAuth && onNavigateAuth('login')}
+              onClick={() => onNavigateAuth ? onNavigateAuth('login') : navigate('/login')}
               className="header-login-btn"
             >
               {t('auth.login')}
