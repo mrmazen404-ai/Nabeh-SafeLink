@@ -34,7 +34,7 @@ import BottomNav from './components/BottomNav';
 import './styles/theme.css';
 
 const TAB_PATHS = {
-  home: '/',
+  home: '/home',
   scan: '/scan',
   history: '/history',
   stats: '/stats',
@@ -127,7 +127,7 @@ function AuthNavigation() {
       'forgot-password': '/forgot-password',
       'reset-password': '/reset-password',
       'verify-otp': '/verify-otp',
-      home: '/',
+      home: '/home',
       scan: '/scan',
     };
     const path = paths[page];
@@ -142,7 +142,7 @@ function AuthNavigation() {
     if (page === 'home') {
       const queryNext = new URLSearchParams(location.search).get('next');
       const from = location.state?.from;
-      const stateNext = from ? `${from.pathname}${from.search || ''}` : '/';
+      const stateNext = from ? `${from.pathname}${from.search || ''}` : '/home';
       navigate(safeNextPath(queryNext || stateNext), { replace: true });
       return;
     }
@@ -158,11 +158,11 @@ function OnboardingRoute() {
 
 function SplashRoute() {
   const navigate = useNavigate();
-  return <Splash onComplete={() => navigate('/onboarding', { replace: true })} />;
+  return <Splash onComplete={() => navigate('/scan', { replace: true })} />;
 }
 
 function SettingsRedirect() {
-  return <Navigate to="/" replace />;
+  return <Navigate to="/home" replace />;
 }
 
 function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
@@ -179,6 +179,9 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
 
   return (
     <Routes>
+      {/* The public entry point always initializes through Splash before Scanner. */}
+      <Route path="/" element={<SplashRoute />} />
+
       <Route element={<PublicRoute />}>
         <Route element={<NavigationLayout initialScanUrl={initialScanUrl} onQuickScan={onQuickScan} onClearInitial={onClearInitial} onNavigateAuth={onNavigateAuth} />}>
           <Route path="/scan" element={<RoutedPage component={Scanner} />} />
@@ -202,7 +205,7 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<NavigationLayout initialScanUrl={initialScanUrl} onQuickScan={onQuickScan} onClearInitial={onClearInitial} onNavigateAuth={onNavigateAuth} />}>
-          <Route path="/" element={<RoutedPage component={Home} onNavigate={navigateFromPage} onQuickScan={rescan} />} />
+          <Route path="/home" element={<RoutedPage component={Home} onNavigate={navigateFromPage} onQuickScan={rescan} />} />
           <Route path="/history" element={<RoutedPage component={History} onQuickScan={rescan} />} />
           <Route path="/stats" element={<RoutedPage component={Statistics} />} />
           <Route path="/settings" element={<SettingsRedirect />} />

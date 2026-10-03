@@ -1,198 +1,215 @@
-/* ============================================
-   Nabeh SafeLink — Ultra-Slow Sober Circular Security Splash
-   Style Reference: Corporate Cyber Security HUD
-   ============================================ */
-
+/* Nabeh SafeLink — clean portrait splash screen */
 .splash-page {
-  min-height: 100dvh;
+  position: relative;
+  isolation: isolate;
   width: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(circle at center, #133256 0%, #0A2540 100%);
-  color: #FFFFFF;
-  padding: 32px 20px;
+  padding: clamp(28px, 6vh, 72px) 24px clamp(128px, 18vh, 190px);
+  background: #FFFFFF;
+  color: #1A2B5E;
+  text-align: center;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 460ms ease, transform 460ms ease;
+  will-change: opacity, transform;
 }
 
-/* Background Cyber Grid Pattern */
-.splash-cyber-grid {
+.splash-page.is-exiting {
+  opacity: 0;
+  transform: scale(1.018);
+  pointer-events: none;
+}
+
+.splash-background {
   position: absolute;
   inset: 0;
-  background-image:
-    linear-gradient(rgba(30, 144, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(30, 144, 255, 0.05) 1px, transparent 1px);
-  background-size: 40px 40px;
-  pointer-events: none;
-  opacity: 0.8;
+  z-index: -3;
+  background:
+    radial-gradient(circle at 50% 24%, rgba(208, 229, 255, 0.22), transparent 28%),
+    #FFFFFF;
 }
 
-/* Content Box */
 .splash-content {
   position: relative;
-  z-index: 10;
+  z-index: 2;
+  width: min(100%, 560px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-align: center;
+  justify-content: center;
+  gap: clamp(14px, 2.5vh, 24px);
+  animation: splashFadeIn 0.65s ease-out both;
+}
+
+.splash-brand-mark {
+  width: clamp(126px, 24vw, 180px);
+  height: clamp(144px, 28vw, 204px);
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 12px 20px rgba(30, 94, 255, 0.12));
+}
+
+.splash-shield {
   width: 100%;
-  max-width: 600px;
+  height: 100%;
+  overflow: visible;
 }
 
-/* Scaled Logo Wrapper */
-.splash-logo-wrapper {
-  margin-bottom: 48px;
-  transform: scale(1.3);
-  filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.4));
+.splash-link-icon {
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
 }
 
-.splash-logo-wrapper .nabeh-logo-title {
-  color: #FFFFFF !important;
-}
-
-.splash-logo-wrapper .nabeh-logo-tagline {
-  color: #9CA3AF !important;
-}
-
-/* Multi-Ring Radar Spinner (Ultra Slow & Majestic 20s/24s) */
-.splash-radar-wrapper {
-  position: relative;
-  width: 140px;
-  height: 140px;
-  margin-bottom: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.radar-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 2px solid transparent;
-}
-
-/* Outer Ring (20s Rotation) */
-.radar-ring-outer {
-  inset: 0;
-  border-top-color: #1E90FF;
-  border-bottom-color: rgba(30, 144, 255, 0.2);
-  animation: radarSpin 20s linear infinite;
-  box-shadow: 0 0 20px rgba(30, 144, 255, 0.15);
-}
-
-/* Middle Counter-Rotating Ring (24s Rotation) */
-.radar-ring-middle {
-  inset: 14px;
-  border-left-color: #16A34A;
-  border-right-color: rgba(22, 163, 74, 0.2);
-  animation: radarSpinReverse 24s linear infinite;
-}
-
-/* Inner Dotted Ring */
-.radar-ring-inner {
-  inset: 28px;
-  border: 1px dashed rgba(30, 144, 255, 0.4);
-  animation: radarPulse 8s ease-in-out infinite;
-}
-
-/* Center Icon */
-.radar-center-icon {
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  filter: drop-shadow(0 0 10px rgba(30, 144, 255, 0.5));
-}
-
-/* Status Text Block */
-.splash-status-block {
+.splash-wordmark h1 {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   align-items: center;
+  gap: 1px;
+  margin: 0;
+  line-height: 0.98;
+  font-family: Inter, Poppins, Roboto, Arial, sans-serif;
 }
 
-.splash-status-title {
-  font-family: 'IBM Plex Sans Arabic', sans-serif;
-  font-size: 16px;
+.splash-wordmark-main {
+  color: #1A2B5E;
+  font-size: clamp(42px, 8vw, 68px);
+  font-weight: 800;
+  letter-spacing: -2.5px;
+}
+
+.splash-wordmark-sub {
+  color: #1E5EFF;
+  font-size: clamp(25px, 5vw, 40px);
   font-weight: 700;
-  color: #FFFFFF;
-  letter-spacing: 0.3px;
+  letter-spacing: -1.2px;
 }
 
-.splash-status-subtitle {
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  color: #1E90FF;
+.splash-tagline {
+  margin: clamp(12px, 2vh, 18px) 0 0;
+  color: #4C7AC2;
+  font-family: Inter, Poppins, Roboto, Arial, sans-serif;
+  font-size: clamp(12px, 2vw, 15px);
   font-weight: 500;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.35px;
 }
 
-/* Footer */
+.splash-tagline span {
+  color: #8CB9FF;
+  padding: 0 7px;
+}
+
+.splash-status-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: clamp(14px, 3vh, 28px);
+  color: #6C91C8;
+  font-family: 'IBM Plex Sans Arabic', Inter, sans-serif;
+  font-size: clamp(12px, 2vw, 14px);
+  font-weight: 500;
+}
+
+.splash-status-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.splash-status-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #1E5EFF;
+  animation: splashDot 1.1s ease-in-out infinite;
+}
+
+.splash-status-dots i:nth-child(2) { animation-delay: 0.15s; }
+.splash-status-dots i:nth-child(3) { animation-delay: 0.3s; }
+
 .splash-footer {
   position: absolute;
-  bottom: 24px;
-  left: 0;
-  right: 0;
+  z-index: 3;
+  left: 24px;
+  right: 24px;
+  bottom: clamp(76px, 12vh, 122px);
+  margin: 0;
+  color: #8CB9FF;
   text-align: center;
-  font-size: 11px;
-  font-family: 'Inter', sans-serif;
-  color: #6B7280;
-  letter-spacing: 0.5px;
+  font-family: Inter, Poppins, Roboto, Arial, sans-serif;
+  font-size: clamp(11px, 1.8vw, 14px);
+  font-weight: 400;
+  letter-spacing: 0.2px;
 }
 
-/* Ultra-Slow Majestic Animations */
-@keyframes radarSpin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+.splash-waves {
+  position: absolute;
+  z-index: -1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: clamp(170px, 29vh, 360px);
+  pointer-events: none;
 }
 
-@keyframes radarSpinReverse {
-  0% { transform: rotate(360deg); }
-  100% { transform: rotate(0deg); }
-}
-
-@keyframes radarPulse {
-  0%, 100% { transform: scale(1); opacity: 0.8; }
-  50% { transform: scale(1.02); opacity: 1; }
-}
-
-/* Fade In Entrance */
-.fade-in {
-  animation: splashFadeIn 0.5s ease-out;
-}
+.splash-wave-back { fill: #D0E5FF; opacity: 0.62; }
+.splash-wave-mid { fill: #A9CCFF; opacity: 0.72; }
+.splash-wave-front { fill: #8CB9FF; opacity: 0.82; }
 
 @keyframes splashFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes splashDot {
+  0%, 100% { opacity: 0.35; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+
+@media (max-width: 480px) {
+  .splash-page {
+    padding-right: 18px;
+    padding-left: 18px;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  .splash-footer {
+    left: 18px;
+    right: 18px;
+  }
+
+  .splash-status-block {
+    gap: 7px;
+    flex-direction: column;
   }
 }
 
-/* Mobile Scaling Adjustments */
-@media (max-width: 480px) {
-  .splash-logo-wrapper {
-    transform: scale(1.1);
-    margin-bottom: 36px;
+@media (max-height: 640px) {
+  .splash-page {
+    padding-top: 18px;
+    padding-bottom: 104px;
   }
 
-  .splash-radar-wrapper {
-    width: 120px;
-    height: 120px;
-    margin-bottom: 28px;
-  }
+  .splash-content { gap: 8px; }
+  .splash-brand-mark { width: 104px; height: 118px; }
+  .splash-wordmark-main { font-size: 38px; }
+  .splash-wordmark-sub { font-size: 23px; }
+  .splash-tagline { margin-top: 8px; }
+  .splash-status-block { margin-top: 8px; }
+  .splash-footer { bottom: 58px; }
+}
 
-  .splash-status-title {
-    font-size: 14px;
-  }
+@media (prefers-reduced-motion: reduce) {
+  .splash-content,
+  .splash-status-dots i { animation: none; }
 
-  .splash-status-subtitle {
-    font-size: 11px;
+  .splash-page,
+  .splash-page.is-exiting {
+    transition: none;
+    transform: none;
   }
 }
