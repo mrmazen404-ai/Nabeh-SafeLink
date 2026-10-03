@@ -11,10 +11,10 @@ export default function Splash({ onComplete }) {
 
   useEffect(() => {
     // Reserve the final 460ms for a deliberate fade-out before the route changes.
-    const exitTimer = setTimeout(() => setIsExiting(true), 9740);
+    const exitTimer = setTimeout(() => setIsExiting(true), 2740);
     const completeTimer = setTimeout(() => {
       if (onComplete) onComplete();
-    }, 10200);
+    }, 3200);
     return () => {
       clearTimeout(exitTimer);
       clearTimeout(completeTimer);
