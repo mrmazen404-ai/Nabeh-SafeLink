@@ -1,0 +1,53 @@
+.register-page .login-shell {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+.register-page .login-branding {
+  margin-bottom: 24px;
+}
+
+.register-page .login-form {
+  gap: 13px;
+}
+
+.register-page .login-divider {
+  margin-top: 24px;
+}
+
+.register-success {
+  border: 1px solid var(--color-success-border);
+  border-radius: 12px;
+  padding: 11px 13px;
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.register-footer {
+  margin: 28px 0 0;
+  color: var(--color-text);
+  text-align: center;
+  font: 400 14px Inter, 'Segoe UI', sans-serif;
+}
+
+.register-footer button {
+  padding: 0;
+  border: 0;
+  color: #1877F2;
+  background: transparent;
+  font: 700 14px Inter, 'Segoe UI', sans-serif;
+  cursor: pointer;
+}
+
+.register-footer button:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .register-page .login-shell {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+}

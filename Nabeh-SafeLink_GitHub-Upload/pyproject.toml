@@ -2,7 +2,7 @@
 name = "nabeh-safe-link"
 version = "1.0.0"
 description = "Nabeh SafeLink FastAPI application"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 dependencies = [
   "annotated-doc==0.0.5",
   "annotated-types==0.8.0",

@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { LinkIcon } from '../../components/Icons';
+import { useLanguage } from '../../context/LanguageContext';
+import AuthPageControls from '../../components/AuthPageControls';
 import '../../styles/splash.css';
+import './login.css';
 
 export default function Splash({ onComplete }) {
   const [isExiting, setIsExiting] = useState(false);
+  const { t, dir } = useLanguage();
 
   useEffect(() => {
     // Reserve the final 460ms for a deliberate fade-out before the route changes.
@@ -18,7 +22,8 @@ export default function Splash({ onComplete }) {
   }, [onComplete]);
 
   return (
-    <main className={`splash-page${isExiting ? ' is-exiting' : ''}`} aria-label="Nabeh SafeLink" dir="ltr">
+    <main className={`splash-page${isExiting ? ' is-exiting' : ''}`} aria-label="Nabeh SafeLink" dir={dir}>
+      <AuthPageControls />
       <div className="splash-background" aria-hidden="true" />
 
       <section className="splash-content" aria-live="polite">
@@ -64,16 +69,16 @@ export default function Splash({ onComplete }) {
             <span className="splash-wordmark-main">Nabeh</span>
             <span className="splash-wordmark-sub">SafeLink</span>
           </h1>
-          <p className="splash-tagline">Scan <span>•</span> Detect <span>•</span> Stay Safe</p>
+          <p className="splash-tagline">{t('splash.tagline')}</p>
         </div>
 
         <div className="splash-status-block">
-          <span className="splash-status-title">جاري تهيئة الحماية...</span>
+          <span className="splash-status-title">{t('splash.status')}</span>
           <span className="splash-status-dots" aria-hidden="true"><i /><i /><i /></span>
         </div>
       </section>
 
-      <p className="splash-footer">&ldquo;Your online safety&rdquo; is our priority</p>
+      <p className="splash-footer">{t('splash.footer')}</p>
 
       <svg className="splash-waves" viewBox="0 0 1440 360" preserveAspectRatio="none" aria-hidden="true">
         <path className="splash-wave-back" d="M0 180c190-98 360-80 535-16 195 71 322 72 494-10 161-76 276-72 411-10v216H0Z" />

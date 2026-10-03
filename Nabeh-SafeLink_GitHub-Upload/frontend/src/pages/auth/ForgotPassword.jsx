@@ -1,95 +1,74 @@
 import { useState } from 'react';
 import Logo from '../../components/Logo';
 import { useAuth } from '../../context/AuthContext';
+import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from '../../components/Icons';
+import { useLanguage } from '../../context/LanguageContext';
+import AuthPageControls from '../../components/AuthPageControls';
+import './login.css';
+import './forgot-password.css';
+
+function MailIcon({ size = 20, color = 'currentColor' }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>;
+}
 
 export default function ForgotPassword({ onNavigate }) {
   const { forgotPassword } = useAuth();
+  const { t, dir } = useLanguage();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     if (!email.trim()) return;
 
     setLoading(true);
     try {
-      const res = await forgotPassword(email.trim());
-      setMessage(res.message || 'إذا كان البريد المسجل صحيحاً، فستصلك تعليمات إعادة ضبط كلمة المرور');
+      const response = await forgotPassword(email.trim());
+      setMessage(response.message || t('auth.checkInbox'));
       setSubmitted(true);
-    } catch (err) {
-      setMessage('إذا كان البريد المسجل صحيحاً، فستصلك تعليمات إعادة ضبط كلمة المرور');
+    } catch {
+      // Keep the same privacy-preserving response for existing and unknown emails.
+      setMessage(t('auth.checkInbox'));
       setSubmitted(true);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-subtle)', padding: '20px' }}>
-      <div className="card" style={{ maxWidth: '440px', width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-6)' }}>
-          <Logo size="lg" showTagline={true} />
-        </div>
+  const BackIcon = dir === 'rtl' ? ArrowRightIcon : ArrowLeftIcon;
 
-        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 'var(--space-2)', textAlign: 'center' }}>
-          استعادة كلمة المرور
-        </h1>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)', textAlign: 'center' }}>
-          أدخل بريدك الإلكتروني ليصلك رابط إعادة ضبط كلمة المرور
-        </p>
+  return (
+    <main className="login-page forgot-page" dir={dir}>
+      <AuthPageControls />
+      <div className="login-shell">
+        <div className="login-branding"><Logo size="lg" showTagline={false} /></div>
+
+        <section className="login-welcome" aria-labelledby="forgot-title">
+          <h1 id="forgot-title">{t('auth.forgotTitle')}</h1>
+          <p>{t('auth.forgotSubtitle')}</p>
+        </section>
 
         {submitted ? (
-          <div style={{ textAlign: 'center', padding: '16px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', color: '#16A34A', fontSize: '14px', fontWeight: 600, marginBottom: 'var(--space-6)' }}>
-            <div>{message}</div>
-            <button
-              type="button"
-              onClick={() => onNavigate('verify-otp', { email: email.trim(), type: 'recovery' })}
-              style={{ marginTop: '14px', background: 'none', border: 'none', color: 'var(--color-secondary)', fontWeight: 700, cursor: 'pointer' }}
-            >
-              إدخال رمز الاستعادة
-            </button>
-          </div>
+          <section className="forgot-success" role="status" aria-live="polite">
+            <span className="forgot-success-icon"><CheckCircleIcon size={24} color="currentColor" /></span>
+            <h2>{t('auth.checkInbox')}</h2>
+            <p>{message}</p>
+            <button type="button" className="forgot-code-button" onClick={() => onNavigate('verify-otp', { email: email.trim(), type: 'recovery' })}>{t('auth.enterRecovery')}</button>
+          </section>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 'var(--space-1)' }}>
-                البريد الإلكتروني
-              </label>
-              <input
-                type="email"
-                autoComplete="email"
-                className="scanner-input"
-                style={{ direction: 'ltr', textAlign: 'left', minHeight: '44px', paddingLeft: '14px' }}
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading || !email.trim()}
-              style={{ width: '100%' }}
-            >
-              <span>{loading ? 'جاري الإرسال...' : 'إرسال التعليمات'}</span>
-            </button>
+          <form className="login-form" onSubmit={handleSubmit} noValidate>
+            <label className="login-field">
+              <span className="login-field-icon"><MailIcon size={19} color="currentColor" /></span>
+              <input type="email" autoComplete="email" placeholder={t('auth.emailAddress')} value={email} onChange={(event) => setEmail(event.target.value)} aria-label={t('auth.emailAddress')} required />
+            </label>
+            <button className="login-submit" type="submit" disabled={loading || !email.trim()}><span>{loading ? '…' : t('auth.sendReset')}</span><BackIcon size={17} /></button>
           </form>
         )}
 
-        <div style={{ marginTop: 'var(--space-6)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border)', textAlign: 'center' }}>
-          <button
-            type="button"
-            onClick={() => onNavigate('login')}
-            style={{ background: 'none', border: 'none', color: 'var(--color-secondary)', fontWeight: 700, cursor: 'pointer', fontSize: 'var(--text-sm)' }}
-          >
-            ← العودة لتسجيل الدخول
-          </button>
-        </div>
+        <button type="button" className="forgot-back-button" onClick={() => onNavigate('login')}><BackIcon size={16} /> {t('auth.backToSignIn')}</button>
       </div>
-    </div>
+    </main>
   );
 }

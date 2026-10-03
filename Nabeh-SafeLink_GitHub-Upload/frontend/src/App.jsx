@@ -20,6 +20,7 @@ import Register from './pages/auth/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import VerifyOtp from './pages/auth/VerifyOtp';
+import WelcomePage from './pages/WelcomePage';
 
 import Home from './pages/Home';
 import Scanner from './pages/Scanner';
@@ -158,7 +159,7 @@ function OnboardingRoute() {
 
 function SplashRoute() {
   const navigate = useNavigate();
-  return <Splash onComplete={() => navigate('/scan', { replace: true })} />;
+  return <Splash onComplete={() => navigate('/welcome', { replace: true })} />;
 }
 
 function SettingsRedirect() {
@@ -179,7 +180,7 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
 
   return (
     <Routes>
-      {/* The public entry point always initializes through Splash before Scanner. */}
+      {/* The public entry point initializes through Splash before WelcomePage. */}
       <Route path="/" element={<SplashRoute />} />
 
       <Route element={<PublicRoute />}>
@@ -192,6 +193,7 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
           <Route path="/about" element={<RoutedPage component={About} />} />
         </Route>
         <Route path="/reset-password" element={<ResetPassword onNavigate={onNavigateAuth} />} />
+        <Route path="/welcome" element={<WelcomePage />} />
         <Route path="/onboarding" element={<OnboardingRoute />} />
         <Route path="/splash" element={<SplashRoute />} />
       </Route>
