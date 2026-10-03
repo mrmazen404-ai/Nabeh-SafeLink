@@ -10,7 +10,7 @@ export default function Splash({ onComplete }) {
     const exitTimer = setTimeout(() => setIsExiting(true), 9740);
     const completeTimer = setTimeout(() => {
       if (onComplete) onComplete();
-    }, 3200);
+    }, 10200);
     return () => {
       clearTimeout(exitTimer);
       clearTimeout(completeTimer);
