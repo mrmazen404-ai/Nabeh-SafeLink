@@ -1,10 +1,28 @@
-// Deliberately memory-only: access tokens are not persisted in browser storage.
-let accessToken = null;
+const STORAGE_KEY = 'nabeh_access_token';
 
-export const getAccessToken = () => accessToken;
-export const setAccessToken = (token) => {
-  accessToken = typeof token === 'string' && token.trim() ? token : null;
+// Session-scoped persistence keeps the user on the same route after Refresh
+// without creating a long-lived localStorage credential.
+export const getAccessToken = () => {
+  try {
+    return sessionStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
 };
+
+export const setAccessToken = (token) => {
+  try {
+    if (typeof token === 'string' && token.trim()) sessionStorage.setItem(STORAGE_KEY, token.trim());
+    else sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // If storage is unavailable, the API request still remains the source of truth.
+  }
+};
+
 export const clearAccessToken = () => {
-  accessToken = null;
+  try {
+    sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Nothing else is required for local logout.
+  }
 };

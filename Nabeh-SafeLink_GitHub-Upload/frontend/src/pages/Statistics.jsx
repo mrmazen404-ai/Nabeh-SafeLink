@@ -10,6 +10,7 @@ export default function Statistics({ activeTab, setActiveTab, isGuest = true, on
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (isGuest) {
@@ -30,7 +31,7 @@ export default function Statistics({ activeTab, setActiveTab, isGuest = true, on
       }
     }
     loadStats();
-  }, [isGuest]);
+  }, [isGuest, retryKey]);
 
   if (isGuest) return null;
 
@@ -44,7 +45,12 @@ export default function Statistics({ activeTab, setActiveTab, isGuest = true, on
       <Header activeTab={activeTab} setActiveTab={setActiveTab} onNavigateAuth={onNavigateAuth} />
 
       <main className="page-container" aria-label={t('stats.title')}>
-        {error && <div className="card" role="alert" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
+        {error && <div className="card" role="alert" style={{ marginBottom: 'var(--space-4)' }}>
+          <div>{error}</div>
+          <button type="button" className="btn btn-outline" onClick={() => { setError(''); setLoading(true); setRetryKey((value) => value + 1); }} style={{ marginTop: '12px' }}>
+            إعادة المحاولة
+          </button>
+        </div>}
         {loading && <div role="status" style={{ marginBottom: 'var(--space-4)' }}>جارٍ تحميل الإحصاءات…</div>}
         <div style={{ marginBottom: 'var(--space-6)' }}>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 'var(--space-2)' }}>

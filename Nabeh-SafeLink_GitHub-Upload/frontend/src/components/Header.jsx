@@ -1,9 +1,11 @@
 import Logo from './Logo';
 import { useAuth } from '../context/AuthContext';
 import { ShieldCheckIcon, ShieldIcon, BarChartIcon, InfoIcon } from './Icons';
+import { useNavigate } from 'react-router-dom';
 
 export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
   const { user, isGuest, logout } = useAuth();
+  const navigate = useNavigate();
   const navItems = isGuest
     ? [{ id: 'scan', label: 'الفحص', icon: ShieldIcon }]
     : [
@@ -52,7 +54,10 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
               </span>
               <button
                 type="button"
-                onClick={logout}
+                onClick={async () => {
+                  await logout();
+                  navigate('/login', { replace: true });
+                }}
                 style={{ background: 'none', border: '1px solid var(--color-border)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: 'var(--color-danger)', cursor: 'pointer', fontWeight: 600 }}
               >
                 خروج

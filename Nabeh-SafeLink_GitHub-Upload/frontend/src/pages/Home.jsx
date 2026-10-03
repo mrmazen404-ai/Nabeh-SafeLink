@@ -8,6 +8,7 @@ export default function Home({ onNavigate, onQuickScan, activeTab, setActiveTab,
   const [recentScans, setRecentScans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     async function loadData() {
@@ -25,7 +26,7 @@ export default function Home({ onNavigate, onQuickScan, activeTab, setActiveTab,
       }
     }
     loadData();
-  }, []);
+  }, [retryKey]);
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--color-bg-subtle)' }}>
@@ -33,7 +34,12 @@ export default function Home({ onNavigate, onQuickScan, activeTab, setActiveTab,
 
       <main className="page-container">
         {/* Desktop Top Grid Layout (2 Columns on Desktop) */}
-        {error && <div className="card" role="alert" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
+        {error && <div className="card" role="alert" style={{ marginBottom: 'var(--space-4)' }}>
+          <div>{error}</div>
+          <button type="button" className="btn btn-outline" onClick={() => { setError(''); setLoading(true); setRetryKey((value) => value + 1); }} style={{ marginTop: '12px' }}>
+            إعادة المحاولة
+          </button>
+        </div>}
         <div className="home-hero-grid">
           {/* Hero Banner */}
           <div className="home-hero-card">

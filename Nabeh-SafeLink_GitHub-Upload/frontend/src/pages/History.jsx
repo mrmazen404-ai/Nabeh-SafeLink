@@ -10,6 +10,7 @@ export default function History({ onQuickScan, activeTab, setActiveTab, isGuest 
   const [scans, setScans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
   const [filter, setFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -32,7 +33,7 @@ export default function History({ onQuickScan, activeTab, setActiveTab, isGuest 
       }
     }
     loadScans();
-  }, [isGuest]);
+  }, [isGuest, retryKey]);
 
   if (isGuest) return null;
 
@@ -116,7 +117,12 @@ export default function History({ onQuickScan, activeTab, setActiveTab, isGuest 
         </div>
 
         {/* List Items */}
-        {error && <div className="card" role="alert" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
+        {error && <div className="card" role="alert" style={{ marginBottom: 'var(--space-4)' }}>
+          <div>{error}</div>
+          <button type="button" className="btn btn-outline" onClick={() => { setError(''); setLoading(true); setRetryKey((value) => value + 1); }} style={{ marginTop: '12px' }}>
+            إعادة المحاولة
+          </button>
+        </div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           {loading && <div className="card" role="status">جارٍ تحميل السجل…</div>}
           {!loading && !error && filteredScans.length === 0 ? (

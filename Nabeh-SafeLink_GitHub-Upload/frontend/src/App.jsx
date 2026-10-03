@@ -59,11 +59,19 @@ function LoadingRoute() {
   );
 }
 
+function safeNextPath(value) {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '/';
+  return value;
+}
+
 function ProtectedRoute() {
   const { isGuest, loading } = useAuth();
   const location = useLocation();
   if (loading) return <LoadingRoute />;
-  if (isGuest) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (isGuest) {
+    const next = `${location.pathname}${location.search || ''}`;
+    return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace state={{ from: location }} />;
+  }
   return <Outlet />;
 }
 
@@ -111,7 +119,6 @@ function RoutedPage({ component: Component, ...props }) {
 function AuthNavigation() {
   const navigate = useNavigate();
   const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
 
   return (page, data = {}) => {
     const paths = {
@@ -133,8 +140,10 @@ function AuthNavigation() {
     }
 
     if (page === 'home') {
+      const queryNext = new URLSearchParams(location.search).get('next');
       const from = location.state?.from;
-      navigate(from ? `${from.pathname}${from.search || ''}` : '/', { replace: true });
+      const stateNext = from ? `${from.pathname}${from.search || ''}` : '/';
+      navigate(safeNextPath(queryNext || stateNext), { replace: true });
       return;
     }
 
