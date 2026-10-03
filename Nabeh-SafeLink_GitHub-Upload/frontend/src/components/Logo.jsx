@@ -1,6 +1,8 @@
 import { ShieldIcon, LinkIcon } from './Icons';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Logo({ size = 'md', showTagline = false }) {
+  const { t } = useLanguage();
   const iconSize = size === 'lg' ? 44 : size === 'sm' ? 28 : 36;
   const titleSize = size === 'lg' ? '22px' : size === 'sm' ? '14px' : '18px';
   const subSize = size === 'lg' ? '16px' : size === 'sm' ? '11px' : '14px';
@@ -37,7 +39,7 @@ export default function Logo({ size = 'md', showTagline = false }) {
         </div>
         {showTagline && (
           <span style={{ color: 'var(--color-text-muted, #6B7280)', fontSize: '11px', fontFamily: 'Inter, sans-serif', fontWeight: 500, letterSpacing: '0.2px' }}>
-            Scan • Detect • Stay Safe
+            {t('splash.tagline')}
           </span>
         )}
       </div>

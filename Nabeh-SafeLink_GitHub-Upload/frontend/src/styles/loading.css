@@ -13,6 +13,10 @@
   background: linear-gradient(135deg, #0A2540 0%, #1a3a5c 100%);
 }
 
+[data-theme="dark"] .loading-page {
+  background: linear-gradient(135deg, #020617 0%, #0F172A 100%);
+}
+
 .loading-bg {
   position: absolute;
   inset: 0;
@@ -257,3 +261,20 @@
     font-size: 12px;
   }
 }
+
+/* Security scan animation layer */
+.loading-content { animation: loading-card-enter .65s cubic-bezier(.2,.8,.2,1) both; }
+.loading-spinner-wrapper { overflow: visible; }
+.loading-spinner-wrapper::before { content: ''; position: absolute; inset: -12px; border: 1px solid rgba(30,144,255,.24); border-radius: 50%; animation: radar-pulse 2.4s ease-out infinite; }
+.loading-spinner-wrapper::after { content: ''; position: absolute; inset: 20px; border: 1px dashed rgba(30,144,255,.35); border-radius: 50%; animation: spin 9s linear infinite reverse; }
+.loading-scan-line { position: absolute; z-index: 3; left: 20px; right: 20px; top: 50%; height: 2px; border-radius: 999px; background: linear-gradient(90deg, transparent, #60A5FA, #FFFFFF, #60A5FA, transparent); box-shadow: 0 0 14px #60A5FA; animation: scan-line 1.8s ease-in-out infinite; }
+.loading-icon { position: relative; z-index: 4; }
+.loading-message { animation: message-shift .45s ease both; }
+.loading-url-box { animation: loading-item-in .55s .1s ease both; }
+.loading-dots { animation: loading-item-in .55s .2s ease both; }
+@keyframes scan-line { 0%, 100% { transform: translateY(-30px) scaleX(.55); opacity: .15; } 50% { transform: translateY(30px) scaleX(1); opacity: 1; } }
+@keyframes radar-pulse { 0% { transform: scale(.82); opacity: .65; } 100% { transform: scale(1.25); opacity: 0; } }
+@keyframes loading-card-enter { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes loading-item-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes message-shift { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .loading-spinner-wrapper::before, .loading-spinner-wrapper::after, .loading-scan-line { animation: none; } }

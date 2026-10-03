@@ -4,7 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import '../styles/loading.css';
 
 export default function LoadingScreen({ url, onCancel }) {
-  const { t } = useLanguage();
+  const { t, dir } = useLanguage();
   const [messageIndex, setMessageIndex] = useState(0);
 
   const messages = t('loading.messages') || [
@@ -24,7 +24,7 @@ export default function LoadingScreen({ url, onCancel }) {
   }, [messages.length]);
 
   return (
-    <div className="loading-page" role="status" aria-busy="true">
+    <div className="loading-page" role="status" aria-busy="true" dir={dir}>
       <div className="loading-bg">
         <div className="loading-bg-shape loading-bg-shape-1"></div>
         <div className="loading-bg-shape loading-bg-shape-2"></div>
@@ -36,6 +36,7 @@ export default function LoadingScreen({ url, onCancel }) {
           <div className="loading-ring loading-ring-1"></div>
           <div className="loading-ring loading-ring-2"></div>
           <div className="loading-ring loading-ring-3"></div>
+          <div className="loading-scan-line" aria-hidden="true"></div>
           <div className="loading-icon">
             <ShieldCheckIcon size={44} color="#1E90FF" />
           </div>

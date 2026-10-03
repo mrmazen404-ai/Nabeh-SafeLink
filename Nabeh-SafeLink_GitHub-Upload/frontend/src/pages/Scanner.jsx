@@ -14,15 +14,17 @@ import {
   InfoIcon
 } from '../components/Icons';
 import '../styles/scanner.css';
+import { useLanguage } from '../context/LanguageContext';
 
 const STATUS_CFG = {
-  SAFE: { icon: CheckCircleIcon, className: 'recent-safe', label: 'آمن' },
-  SUSPICIOUS: { icon: AlertTriangleIcon, className: 'recent-suspicious', label: 'مشبوه' },
-  DANGEROUS: { icon: XCircleIcon, className: 'recent-dangerous', label: 'خطر' },
-  UNKNOWN: { icon: HelpCircleIcon, className: 'recent-unknown', label: 'غير معروف' },
+  SAFE: { icon: CheckCircleIcon, className: 'recent-safe' },
+  SUSPICIOUS: { icon: AlertTriangleIcon, className: 'recent-suspicious' },
+  DANGEROUS: { icon: XCircleIcon, className: 'recent-dangerous' },
+  UNKNOWN: { icon: HelpCircleIcon, className: 'recent-unknown' },
 };
 
 export default function Scanner({ initialUrl = '', onClearInitial, activeTab, setActiveTab, isGuest = true, onNavigateAuth }) {
+  const { t, lang, dir } = useLanguage();
   const [url, setUrl] = useState(initialUrl);
   const [scanType, setScanType] = useState('URL');
   const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
   const handleScan = async (targetUrl = url) => {
     const textToScan = targetUrl || url;
     if (!textToScan || !textToScan.trim()) {
-      setError('الرجاء إدخال رابط أو نص صحيح للتحقق منه');
+      setError(t('scanner.errEmptyInput'));
       return;
     }
 
@@ -71,15 +73,15 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
     setResult(null);
 
     try {
-      const response = await scanURL(textToScan.trim(), 'ar', isGuest, scanType);
+      const response = await scanURL(textToScan.trim(), lang, isGuest, scanType);
       if (response && response.success) {
         setResult(response.data);
         if (!isGuest) fetchScans();
       } else {
-        setError('حدث خطأ أثناء الفحص، حاول مرة أخرى');
+        setError(t('scanner.errScanFailed'));
       }
     } catch (err) {
-      setError('تعذر الاتصال بالخادم. تأكد من تشغيل خادم FastAPI Backend.');
+      setError(t('scanner.errServerConnection'));
     } finally {
       setLoading(false);
     }
@@ -94,7 +96,7 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
         if (inputRef.current) inputRef.current.focus();
       }
     } catch (e) {
-      setError('تعذر القراءة من المحافظة تلقائياً');
+      setError(t('scanner.errPaste'));
     }
   };
 
@@ -128,30 +130,16 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
   }
 
   return (
-    <div style={{ minHeight: '100dvh', background: 'var(--color-bg-subtle)' }}>
+    <div className="scanner-page" dir={dir}>
       <Header activeTab={activeTab} setActiveTab={setActiveTab} onNavigateAuth={onNavigateAuth} />
 
       <main className="page-container">
         {/* Guest Mode Privacy Notice (Strict PRD Compliance) */}
         {isGuest && (
-          <div
-            style={{
-              padding: '12px 16px',
-              background: '#F0FDF4',
-              border: '1px solid #BBF7D0',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: 'var(--space-4)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              fontSize: '13px',
-              color: '#16A34A',
-              fontWeight: 500
-            }}
-          >
+          <div className="scanner-guest-notice">
             <InfoIcon size={18} color="#16A34A" />
             <span>
-              <strong>فحص كضيف:</strong> يمكنك فحص رابط أو رسالة وعرض النتيجة الحالية دون الحاجة لحساب. لا تُحفظ نتائج وضع الضيف في قاعدة البيانات ولا تظهر كسجل.
+              <strong>{t('scanner.guestTitle')}</strong> {t('scanner.guestDesc')}
             </span>
           </div>
         )}
@@ -161,61 +149,44 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
           {/* Main Input Panel */}
           <div>
             {/* Toggle Mode URL vs TEXT */}
-            <div style={{ display: 'flex', background: 'var(--color-bg)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-4)' }}>
+            <div className="scanner-toggle-bar">
               <button
                 type="button"
+                className={`scanner-toggle-btn ${scanType === 'URL' ? 'active' : ''}`}
                 onClick={() => setScanType('URL')}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  border: 'none',
-                  borderRadius: 'var(--radius-sm)',
-                  background: scanType === 'URL' ? 'var(--color-primary)' : 'transparent',
-                  color: scanType === 'URL' ? '#FFFFFF' : 'var(--color-text-secondary)',
-                  fontWeight: 600,
-                  fontSize: 'var(--text-sm)',
-                  cursor: 'pointer',
-                  transition: 'all var(--transition-fast)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
               >
-                <LinkIcon size={16} color={scanType === 'URL' ? '#FFFFFF' : 'var(--color-text-secondary)'} />
-                <span>فحص رابط (URL)</span>
+                <LinkIcon size={16} color="currentColor" />
+                <span>{t('scanner.tabUrl')}</span>
               </button>
               <button
                 type="button"
+                className={`scanner-toggle-btn ${scanType === 'TEXT' ? 'active' : ''}`}
                 onClick={() => setScanType('TEXT')}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  border: 'none',
-                  borderRadius: 'var(--radius-sm)',
-                  background: scanType === 'TEXT' ? 'var(--color-primary)' : 'transparent',
-                  color: scanType === 'TEXT' ? '#FFFFFF' : 'var(--color-text-secondary)',
-                  fontWeight: 600,
-                  fontSize: 'var(--text-sm)',
-                  cursor: 'pointer',
-                  transition: 'all var(--transition-fast)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
               >
-                <span>فحص نص / رسالة (SMS)</span>
+                <span>{t('scanner.tabText')}</span>
               </button>
             </div>
-
             <div className="scanner-input-card">
-              <h1 className="scanner-title">فحص وكشف التهديدات</h1>
+              <div className="scanner-hero-row">
+                <div className="scanner-hero-mark" aria-hidden="true">
+                  <span className="scanner-hero-shield"><CheckCircleIcon size={22} color="#FFFFFF" /></span>
+                </div>
+                <div className="scanner-hero-copy">
+                  <span className="scanner-kicker">{dir === 'rtl' ? 'مركز نابح للحماية الذكية' : 'NABEH SECURE WORKSPACE'}</span>
+                  <span className="scanner-live-status"><i />{dir === 'rtl' ? 'حماية نشطة ومراقبة فورية' : 'Live protection enabled'}</span>
+                </div>
+              </div>
+              <h1 className="scanner-title">{t('scanner.pageTitle')}</h1>
               <p className="scanner-subtitle">
                 {scanType === 'URL'
-                  ? 'ضع الرابط المطلوب تحليله للكشف عن محاولات التصيد والروابط الخبيثة'
-                  : 'أدخل نص الرسالة المشبوهة أو البريد الإلكتروني لفحص مؤشرات الاحتيال'}
+                  ? t('scanner.subUrl')
+                  : t('scanner.subText')}
               </p>
+              <div className="scanner-trust-row" aria-label={dir === 'rtl' ? 'مزايا الفحص' : 'Scan capabilities'}>
+                <span><CheckCircleIcon size={14} />{dir === 'rtl' ? 'تحليل بالذكاء الاصطناعي' : 'AI analysis'}</span>
+                <span><CheckCircleIcon size={14} />{dir === 'rtl' ? 'فحص متعدد المصادر' : 'Multi-source scan'}</span>
+                <span><CheckCircleIcon size={14} />{dir === 'rtl' ? 'خصوصية أولاً' : 'Privacy first'}</span>
+              </div>
 
               <div className="scanner-input-wrapper">
                 <span className="scanner-input-icon">
@@ -225,7 +196,7 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
                   ref={inputRef}
                   type="text"
                   className="scanner-input"
-                  placeholder={scanType === 'URL' ? 'ضع الرابط هنا... e.g. https://example.com' : 'ضع نص الرسالة هنا...'}
+                  placeholder={scanType === 'URL' ? t('scanner.placeholderUrl') : t('scanner.placeholderText')}
                   value={url}
                   onChange={(e) => {
                     setUrl(e.target.value);
@@ -238,20 +209,20 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
                   <button
                     className="input-action-btn clear-btn"
                     onClick={handleClear}
-                    title="مسح الخانة"
+                    title={t('scanner.clear')}
                     type="button"
                   >
-                    <span>مسح</span>
+                    <span>{t('scanner.clear')}</span>
                   </button>
                 ) : (
                   <button
                     className="input-action-btn paste-btn"
                     onClick={handlePaste}
-                    title="لصق من الحافظة"
+                    title={t('scanner.paste')}
                     type="button"
                   >
                     <ClipboardIcon size={14} color="currentColor" />
-                    <span>لصق</span>
+                    <span>{t('scanner.paste')}</span>
                   </button>
                 )}
               </div>
@@ -270,25 +241,26 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
                 type="button"
               >
                 <SearchIcon size={18} color="#FFFFFF" />
-                <span>{loading ? 'جاري الفحص...' : 'بدء الفحص الآمن'}</span>
+                <span>{loading ? t('scanner.scanningBtn') : t('scanner.startBtn')}</span>
               </button>
             </div>
           </div>
 
           {/* Registered-account history only; guest scans are never listed here. */}
           {!isGuest && (
-          <section className="recent-section" aria-label="سجل المستخدم المسجل">
+          <section className="recent-section" aria-label={t('scanner.recentScansTitle')}>
             <div className="recent-header">
-              <h2 className="recent-title">آخر الفحوصات المحفوظة</h2>
-              <span className="recent-count">{recentScans.length} فحوصات</span>
+              <h2 className="recent-title">{t('scanner.recentScansTitle')}</h2>
+              <span className="recent-count">{t('scanner.recentCount', { count: recentScans.length })}</span>
             </div>
 
             <div className="recent-list">
-              {recentScans.length === 0 ? <p role="status">لا توجد فحوصات محفوظة بعد.</p> : recentScans.map((scan, idx) => {
+              {recentScans.length === 0 ? <p role="status">{t('scanner.noRecentScans')}</p> : recentScans.map((scan, idx) => {
                 const statusKey = scan.classification || 'SAFE';
                 const cfg = STATUS_CFG[statusKey] || STATUS_CFG.UNKNOWN;
+                const statusLabel = statusKey === 'SAFE' ? t('result.safeLabelAr') : statusKey === 'SUSPICIOUS' ? t('result.suspiciousLabelAr') : statusKey === 'DANGEROUS' ? t('result.dangerousLabelAr') : t('result.unknownLabelAr');
                 const StatusSvg = cfg.icon;
-                const displayUrl = scan.input_value_masked || scan.url || 'رابط مفحوص';
+                const displayUrl = scan.input_value_masked || scan.url || t('home.scannedUrl');
 
                 return (
                   <div
@@ -303,7 +275,7 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
                         {displayUrl}
                       </span>
                       <span className="recent-meta">
-                        {cfg.label} • فحص محفوظ
+                        {statusLabel} • {t('scanner.savedScan')}
                       </span>
                     </div>
                     <span className="recent-arrow">←</span>

@@ -2,21 +2,26 @@ import Logo from './Logo';
 import { useAuth } from '../context/AuthContext';
 import { ShieldCheckIcon, ShieldIcon, BarChartIcon, InfoIcon } from './Icons';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
+import { GlobeIcon, MoonIcon, SunIcon } from './Icons';
 
 export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
   const { user, isGuest, logout } = useAuth();
+  const { lang, dir, toggleLanguage, t } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const navItems = isGuest
-    ? [{ id: 'scan', label: 'الفحص', icon: ShieldIcon }]
+    ? [{ id: 'scan', label: t('nav.scan'), icon: ShieldIcon }]
     : [
-      { id: 'home', label: 'الرئيسية', icon: ShieldIcon },
-      { id: 'scan', label: 'الفحص', icon: ShieldIcon },
-      { id: 'history', label: 'السجل', icon: BarChartIcon },
-      { id: 'stats', label: 'الإحصائيات', icon: InfoIcon },
+      { id: 'home', label: t('nav.home'), icon: ShieldIcon },
+      { id: 'scan', label: t('nav.scan'), icon: ShieldIcon },
+      { id: 'history', label: t('nav.history'), icon: BarChartIcon },
+      { id: 'stats', label: t('nav.stats'), icon: InfoIcon },
     ];
 
   return (
-    <header className="app-header">
+    <header className="app-header" dir={dir}>
       <div className="app-header-container">
         <button
           type="button"
@@ -28,7 +33,7 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
           <Logo size="md" showTagline={true} />
         </button>
 
-        <nav className="header-nav-desktop" aria-label="التنقل الرئيسي">
+        <nav className="header-nav-desktop" aria-label={t('nav.home')}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -39,14 +44,16 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
                 className={`desktop-nav-btn ${isActive ? 'active' : ''}`}
                 onClick={() => setActiveTab(item.id)}
               >
-                <Icon size={18} color={isActive ? '#1E90FF' : '#4B5563'} />
+                <Icon size={18} color={isActive ? 'var(--color-secondary)' : 'var(--color-text-muted)'} />
                 <span>{item.label}</span>
               </button>
             );
           })}
         </nav>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="header-actions">
+          <button type="button" className="header-preference-btn" onClick={toggleLanguage} aria-label={t('nav.changeLanguage')} title={t('nav.changeLanguage')}><GlobeIcon size={15} /><span>{lang === 'ar' ? 'English' : 'العربية'}</span></button>
+          <button type="button" className="header-preference-btn header-theme-btn" onClick={toggleTheme} aria-label={t('auth.toggleTheme')} title={t('auth.toggleTheme')}>{theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}</button>
           {!isGuest && user ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-primary)' }}>
@@ -58,23 +65,23 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
                   await logout();
                   navigate('/login', { replace: true });
                 }}
-                style={{ background: 'none', border: '1px solid var(--color-border)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: 'var(--color-danger)', cursor: 'pointer', fontWeight: 600 }}
+                className="header-logout-btn"
               >
-                خروج
+                {t('auth.logout')}
               </button>
             </div>
           ) : (
             <button
               type="button"
               onClick={() => onNavigateAuth && onNavigateAuth('login')}
-              style={{ background: 'var(--color-primary)', color: '#FFFFFF', border: 'none', padding: '6px 14px', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+              className="header-login-btn"
             >
-              تسجيل الدخول
+              {t('auth.login')}
             </button>
           )}
           <div className="header-badge">
             <ShieldCheckIcon size={16} color="#16A34A" />
-            <span>الحماية نشطة</span>
+            <span>{t('nav.protectionActive')}</span>
           </div>
         </div>
       </div>

@@ -72,6 +72,7 @@ export const translations = {
       recentCount: '{count} فحوصات',
       rescanTooltip: 'انقر لإعادة الفحص المباشر',
       rescanAria: 'إعادة فحص {url} - الحالة {status}',
+      guestTitle: 'فحص كضيف:', guestDesc: 'يمكنك فحص رابط أو رسالة وعرض النتيجة الحالية دون الحاجة لحساب. لا تُحفظ نتائج وضع الضيف في قاعدة البيانات ولا تظهر كسجل.', noRecentScans: 'لا توجد فحوصات محفوظة بعد.', savedScan: 'فحص محفوظ',
     },
 
     // History Page
@@ -146,7 +147,7 @@ export const translations = {
       scanNewBtn: 'فحص رابط جديد',
       copyReportBtn: 'نسخ التقرير المفصل',
       copiedReportBtn: 'تم نسخ التقرير',
-      defaultRec: 'توخَّ الحذر دائماً',
+      defaultRec: 'توخَّ الحذر دائماً', pageLabel: 'نتائج الفحص الرئيسية',
     },
 
     // Error Pages (#47)
@@ -202,7 +203,7 @@ export const translations = {
       ]
     },
     splash: {
-      tagline: 'Scan • Detect • Stay Safe',
+      tagline: 'افحص • اكتشف • ابقَ آمناً',
       footer: 'Nabeh SafeLink Security Infrastructure',
       status: 'جاري تهيئة الحماية...'
     },
@@ -322,7 +323,7 @@ export const translations = {
       securityNotice: 'تنبيه: نبيه أداة إرشادية مساعدة لتقييم مؤشرات الخطر قبل اتخاذ القرار.',
     },
     auth: {
-      language: 'English', changeLanguage: 'تغيير اللغة', toggleTheme: 'تبديل الثيم', loginTitle: 'تسجيل الدخول', loginSubtitle: 'سجّل الدخول إلى حسابك', emailOrUsername: 'البريد الإلكتروني أو اسم المستخدم', emailAddress: 'البريد الإلكتروني', password: 'كلمة المرور', newPassword: 'كلمة المرور الجديدة', confirmPassword: 'تأكيد كلمة المرور', confirmNewPassword: 'تأكيد كلمة المرور الجديدة', rememberMe: 'تذكرني', forgotPassword: 'نسيت كلمة المرور؟', login: 'دخول', register: 'إنشاء حساب', noAccount: 'ليس لديك حساب؟', alreadyAccount: 'لديك حساب بالفعل؟', continueGuest: 'المتابعة كزائر', createAccount: 'إنشاء حساب جديد', registerSubtitle: 'انضم إلينا نحو إنترنت أكثر أماناً', fullName: 'الاسم الكامل', registerAction: 'تسجيل الحساب', verifyEmail: 'تحقق من بريدك الإلكتروني', verifyRecovery: 'تحقق من رمز الاستعادة', codeSent: 'أرسلنا رمزاً مكوناً من 6 أرقام إلى', verifyCode: 'تحقق من الرمز', requestCodeIn: 'يمكن طلب رمز جديد بعد {seconds} ثانية', requestNewCode: 'طلب رمز جديد', backToRecovery: 'العودة لاستعادة كلمة المرور', backToRegister: 'العودة للتسجيل', resetTitle: 'إنشاء كلمة مرور جديدة', resetSubtitle: 'استخدم كلمة مرور قوية من 12 حرفاً على الأقل لحماية حسابك', updatePassword: 'تحديث كلمة المرور', requestRecovery: 'طلب رمز استعادة جديد', resetInvalid: 'جلسة الاستعادة غير صالحة أو منتهية. اطلب رابط استعادة جديداً.', passwordUpdated: 'تم تحديث كلمة المرور', passwordUpdatedDesc: 'تم تغيير كلمة المرور بنجاح. سيتم تحويلك لتسجيل الدخول...', forgotTitle: 'استعادة كلمة المرور', forgotSubtitle: 'أدخل بريدك وسنرسل لك رابطاً آمناً لإعادة التعيين', sendReset: 'إرسال رابط الاستعادة', checkInbox: 'تحقق من بريدك الوارد', enterRecovery: 'إدخال رمز الاستعادة', backToSignIn: 'العودة لتسجيل الدخول', socialDivider: 'أو المتابعة باستخدام', showPassword: 'إظهار كلمة المرور', hidePassword: 'إخفاء كلمة المرور', requiredFields: 'الرجاء إكمال كافة الحقول الإلزامية', passwordMismatch: 'كلمتا المرور غير متطابقتين', passwordLength: 'يجب أن تتكون كلمة المرور من 12 حرفاً على الأقل', invalidCode: 'رمز التحقق غير صحيح أو منتهي الصلاحية', missingEmail: 'البريد الإلكتروني المطلوب للتحقق غير موجود', resetError: 'تعذر تحديث كلمة المرور. قد تكون جلسة الاستعادة منتهية.',
+      language: 'English', changeLanguage: 'تغيير اللغة', toggleTheme: 'تبديل الثيم', logout: 'خروج', loginTitle: 'تسجيل الدخول', loginSubtitle: 'سجّل الدخول إلى حسابك', emailOrUsername: 'البريد الإلكتروني أو اسم المستخدم', emailAddress: 'البريد الإلكتروني', password: 'كلمة المرور', newPassword: 'كلمة المرور الجديدة', confirmPassword: 'تأكيد كلمة المرور', confirmNewPassword: 'تأكيد كلمة المرور الجديدة', rememberMe: 'تذكرني', forgotPassword: 'نسيت كلمة المرور؟', login: 'دخول', register: 'إنشاء حساب', noAccount: 'ليس لديك حساب؟', alreadyAccount: 'لديك حساب بالفعل؟', continueGuest: 'المتابعة كزائر', createAccount: 'إنشاء حساب جديد', registerSubtitle: 'انضم إلينا نحو إنترنت أكثر أماناً', fullName: 'الاسم الكامل', registerAction: 'تسجيل الحساب', verifyEmail: 'تحقق من بريدك الإلكتروني', verifyRecovery: 'تحقق من رمز الاستعادة', codeSent: 'أرسلنا رمزاً مكوناً من 6 أرقام إلى', verifyCode: 'تحقق من الرمز', requestCodeIn: 'يمكن طلب رمز جديد بعد {seconds} ثانية', requestNewCode: 'طلب رمز جديد', backToRecovery: 'العودة لاستعادة كلمة المرور', backToRegister: 'العودة للتسجيل', resetTitle: 'إنشاء كلمة مرور جديدة', resetSubtitle: 'استخدم كلمة مرور قوية من 12 حرفاً على الأقل لحماية حسابك', updatePassword: 'تحديث كلمة المرور', requestRecovery: 'طلب رمز استعادة جديد', resetInvalid: 'جلسة الاستعادة غير صالحة أو منتهية. اطلب رابط استعادة جديداً.', passwordUpdated: 'تم تحديث كلمة المرور', passwordUpdatedDesc: 'تم تغيير كلمة المرور بنجاح. سيتم تحويلك لتسجيل الدخول...', forgotTitle: 'استعادة كلمة المرور', forgotSubtitle: 'أدخل بريدك وسنرسل لك رابطاً آمناً لإعادة التعيين', sendReset: 'إرسال رابط الاستعادة', checkInbox: 'تحقق من بريدك الوارد', enterRecovery: 'إدخال رمز الاستعادة', backToSignIn: 'العودة لتسجيل الدخول', socialDivider: 'أو المتابعة باستخدام', showPassword: 'إظهار كلمة المرور', hidePassword: 'إخفاء كلمة المرور', requiredFields: 'الرجاء إكمال كافة الحقول الإلزامية', passwordMismatch: 'كلمتا المرور غير متطابقتين', passwordLength: 'يجب أن تتكون كلمة المرور من 12 حرفاً على الأقل', invalidCode: 'رمز التحقق غير صحيح أو منتهي الصلاحية', missingEmail: 'البريد الإلكتروني المطلوب للتحقق غير موجود', resetError: 'تعذر تحديث كلمة المرور. قد تكون جلسة الاستعادة منتهية.',
     },
   },
 
@@ -395,6 +396,7 @@ export const translations = {
       recentCount: '{count} scans',
       rescanTooltip: 'Click to trigger instant rescan',
       rescanAria: 'Rescan {url} - Status {status}',
+      guestTitle: 'Guest scan:', guestDesc: 'Scan a URL or message without an account. Guest results are not saved to the database or history.', noRecentScans: 'No saved scans yet.', savedScan: 'Saved scan',
     },
 
     // History Page
@@ -467,7 +469,7 @@ export const translations = {
       mlSuspiciousBadge: 'Suspicious',
       mlRiskProb: '{prob}% Risk',
       scanNewBtn: 'Scan New URL',
-      copyReportBtn: 'Copy Detailed Report',
+      copyReportBtn: 'Copy Detailed Report', pageLabel: 'Main scan results',
       copiedReportBtn: 'Report Copied!',
       defaultRec: 'Always stay vigilant when opening links',
     },
@@ -636,7 +638,7 @@ export const translations = {
       needMoreHelpSub: 'Explore our FAQ or reach out to technical support.',
     },
     auth: {
-      language: 'العربية', changeLanguage: 'Change language', toggleTheme: 'Toggle theme', loginTitle: 'Welcome Back', loginSubtitle: 'Sign in to your account', emailOrUsername: 'Email or username', emailAddress: 'Email address', password: 'Password', newPassword: 'New password', confirmPassword: 'Confirm password', confirmNewPassword: 'Confirm new password', rememberMe: 'Remember me', forgotPassword: 'Forgot password?', login: 'Login', register: 'Register', noAccount: "Don't have an account?", alreadyAccount: 'Already have an account?', continueGuest: 'Continue as guest', createAccount: 'Create Account', registerSubtitle: 'Join us for a safer internet', fullName: 'Full name', registerAction: 'Register', verifyEmail: 'Verify your email', verifyRecovery: 'Verify recovery code', codeSent: 'We sent a 6-digit code to', verifyCode: 'Verify code', requestCodeIn: 'Request a new code in {seconds}s', requestNewCode: 'Request a new code', backToRecovery: 'Back to password recovery', backToRegister: 'Back to registration', resetTitle: 'Create a new password', resetSubtitle: 'Use a strong password with at least 12 characters to protect your account', updatePassword: 'Update password', requestRecovery: 'Request a new recovery code', resetInvalid: 'This recovery session is invalid or expired. Request a new reset link.', passwordUpdated: 'Password updated', passwordUpdatedDesc: 'Your password has been changed successfully. Redirecting you to sign in…', forgotTitle: 'Reset your password', forgotSubtitle: "Enter your email and we'll send you a secure reset link", sendReset: 'Send reset link', checkInbox: 'Check your inbox', enterRecovery: 'Enter recovery code', backToSignIn: 'Back to sign in', socialDivider: 'or continue with', showPassword: 'Show password', hidePassword: 'Hide password', requiredFields: 'Please complete all required fields', passwordMismatch: 'The passwords do not match', passwordLength: 'Your password must be at least 12 characters long', invalidCode: 'The verification code is invalid or has expired', missingEmail: 'The verification email is missing', resetError: 'Unable to update your password. The recovery session may have expired.',
+      language: 'العربية', changeLanguage: 'Change language', toggleTheme: 'Toggle theme', logout: 'Sign out', loginTitle: 'Welcome Back', loginSubtitle: 'Sign in to your account', emailOrUsername: 'Email or username', emailAddress: 'Email address', password: 'Password', newPassword: 'New password', confirmPassword: 'Confirm password', confirmNewPassword: 'Confirm new password', rememberMe: 'Remember me', forgotPassword: 'Forgot password?', login: 'Login', register: 'Register', noAccount: "Don't have an account?", alreadyAccount: 'Already have an account?', continueGuest: 'Continue as guest', createAccount: 'Create Account', registerSubtitle: 'Join us for a safer internet', fullName: 'Full name', registerAction: 'Register', verifyEmail: 'Verify your email', verifyRecovery: 'Verify recovery code', codeSent: 'We sent a 6-digit code to', verifyCode: 'Verify code', requestCodeIn: 'Request a new code in {seconds}s', requestNewCode: 'Request a new code', backToRecovery: 'Back to password recovery', backToRegister: 'Back to registration', resetTitle: 'Create a new password', resetSubtitle: 'Use a strong password with at least 12 characters to protect your account', updatePassword: 'Update password', requestRecovery: 'Request a new recovery code', resetInvalid: 'This recovery session is invalid or expired. Request a new reset link.', passwordUpdated: 'Password updated', passwordUpdatedDesc: 'Your password has been changed successfully. Redirecting you to sign in…', forgotTitle: 'Reset your password', forgotSubtitle: "Enter your email and we'll send you a secure reset link", sendReset: 'Send reset link', checkInbox: 'Check your inbox', enterRecovery: 'Enter recovery code', backToSignIn: 'Back to sign in', socialDivider: 'or continue with', showPassword: 'Show password', hidePassword: 'Hide password', requiredFields: 'Please complete all required fields', passwordMismatch: 'The passwords do not match', passwordLength: 'Your password must be at least 12 characters long', invalidCode: 'The verification code is invalid or has expired', missingEmail: 'The verification email is missing', resetError: 'Unable to update your password. The recovery session may have expired.',
     },
 
     // Footer Component

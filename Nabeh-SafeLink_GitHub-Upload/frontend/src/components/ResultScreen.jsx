@@ -17,7 +17,7 @@ import {
 import '../styles/result.css';
 
 export default function ResultScreen({ result, onReset, activeTab, setActiveTab, isGuest = true, onNavigateAuth }) {
-  const { t } = useLanguage();
+  const { t, dir } = useLanguage();
   const [copied, setCopied] = useState(false);
   const classification = result?.classification || 'UNKNOWN';
 
@@ -75,14 +75,14 @@ export default function ResultScreen({ result, onReset, activeTab, setActiveTab,
   const sourceLabel = result?.source ? t('result.sourceLabel', { source: result.source }) : t('result.hybridSource');
 
   return (
-    <div className="result-page">
+    <div className="result-page" dir={dir}>
       <Header activeTab={activeTab} setActiveTab={setActiveTab} onNavigateAuth={onNavigateAuth} />
 
       <main className="page-container">
         {/* Desktop 2-Column Responsive Grid Layout */}
         <div className="result-desktop-grid">
           {/* Main Analysis Card (65% Width) */}
-          <section className="card result-main-card" aria-label="نتائج الفحص الرئيسية">
+          <section className="card result-main-card" aria-label={t('result.pageLabel')}>
             {/* Status Badge */}
             <div className={`result-badge result-badge-${config.className}`} role="status">
               <StatusIcon size={32} color="currentColor" />
@@ -90,6 +90,12 @@ export default function ResultScreen({ result, onReset, activeTab, setActiveTab,
                 <span className="result-badge-ar">{config.labelAr}</span>
                 <span className="result-badge-en">{config.labelEn} • {sourceLabel}</span>
               </div>
+            </div>
+
+            <div className="result-trust-strip">
+              <span className="result-trust-title">{dir === 'rtl' ? 'ملخص الفحص الأمني' : 'SECURITY ANALYSIS SUMMARY'}</span>
+              <span><ShieldCheckIcon size={14} />{dir === 'rtl' ? 'تحليل متعدد الطبقات' : 'Multi-layer analysis'}</span>
+              <span><SparklesIcon size={14} />{dir === 'rtl' ? 'مدعوم بالذكاء الاصطناعي' : 'AI-assisted'}</span>
             </div>
 
             {/* Inspected URL Box */}
