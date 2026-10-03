@@ -3,7 +3,7 @@ import Logo from '../../components/Logo';
 import { useAuth } from '../../context/AuthContext';
 import { AlertTriangleIcon } from '../../components/Icons';
 
-export default function VerifyOtp({ onNavigate, email = '' }) {
+export default function VerifyOtp({ onNavigate, email = '', type = 'signup' }) {
   const { verifyOtp } = useAuth();
   const [otpToken, setOtpToken] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,8 +28,8 @@ export default function VerifyOtp({ onNavigate, email = '' }) {
     setLoading(true);
 
     try {
-      await verifyOtp(email, otpToken.trim(), 'signup');
-      onNavigate('home');
+      await verifyOtp(email, otpToken.trim(), type);
+      onNavigate(type === 'recovery' ? 'reset-password' : 'home');
     } catch (err) {
       setError('رمز التحقق غير صحيح أو منتهي الصلاحية');
     } finally {

@@ -42,7 +42,14 @@ export default function ForgotPassword({ onNavigate }) {
 
         {submitted ? (
           <div style={{ textAlign: 'center', padding: '16px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', color: '#16A34A', fontSize: '14px', fontWeight: 600, marginBottom: 'var(--space-6)' }}>
-            {message}
+            <div>{message}</div>
+            <button
+              type="button"
+              onClick={() => onNavigate('verify-otp', { email: email.trim(), type: 'recovery' })}
+              style={{ marginTop: '14px', background: 'none', border: 'none', color: 'var(--color-secondary)', fontWeight: 700, cursor: 'pointer' }}
+            >
+              إدخال رمز الاستعادة
+            </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>

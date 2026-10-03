@@ -17,7 +17,7 @@ export default function ResetPassword({ onNavigate }) {
   useEffect(() => {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const queryParams = new URLSearchParams(window.location.search);
-    const token = hashParams.get('access_token') || queryParams.get('access_token') || '';
+    const token = hashParams.get('access_token') || queryParams.get('access_token') || sessionStorage.getItem('nabeh_recovery_token') || '';
     setRecoveryToken(token);
     if (token) window.history.replaceState(null, '', window.location.pathname);
     else setError('رابط الاستعادة غير صالح أو منتهي الصلاحية. اطلب رابطاً جديداً.');

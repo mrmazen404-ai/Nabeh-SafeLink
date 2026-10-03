@@ -1,0 +1,259 @@
+/* ============================================
+   Nabeh SafeLink — Loading Screen
+   ============================================ */
+
+.loading-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 20px;
+  background: linear-gradient(135deg, #0A2540 0%, #1a3a5c 100%);
+}
+
+.loading-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.loading-bg-shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+}
+
+.loading-bg-shape-1 {
+  width: 400px;
+  height: 400px;
+  background: #1E90FF;
+  top: -120px;
+  right: -120px;
+  animation: pulse 8s ease-in-out infinite;
+}
+
+.loading-bg-shape-2 {
+  width: 500px;
+  height: 500px;
+  background: #4da6ff;
+  bottom: -180px;
+  left: -180px;
+  animation: pulse 10s ease-in-out infinite;
+}
+
+.loading-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  padding: 48px 32px;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+
+/* ============ Spinner ============ */
+.loading-spinner-wrapper {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-ring {
+  position: absolute;
+  inset: 0;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  animation: spin 1.5s linear infinite;
+}
+
+.loading-ring-1 {
+  border-top-color: var(--color-secondary);
+  border-right-color: var(--color-secondary);
+}
+
+.loading-ring-2 {
+  inset: 14px;
+  border-top-color: #4da6ff;
+  animation-duration: 2s;
+  animation-direction: reverse;
+}
+
+.loading-ring-3 {
+  inset: 28px;
+  border-top-color: var(--color-warning);
+  animation-duration: 2.5s;
+}
+
+.loading-icon {
+  font-size: 40px;
+  animation: pulse 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 4px 12px rgba(30, 144, 255, 0.4));
+}
+
+/* ============ Text ============ */
+.loading-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--color-text);
+  margin-bottom: 12px;
+  font-family: 'Cairo', sans-serif;
+}
+
+.loading-message {
+  font-size: 16px;
+  color: var(--color-secondary);
+  font-weight: 600;
+  margin-bottom: 24px;
+  min-height: 24px;
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* ============ URL Box ============ */
+.loading-url-box {
+  background: var(--color-bg-subtle);
+  padding: 14px 16px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  border: 1px solid var(--color-border);
+}
+
+.loading-url-label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.loading-url-value {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--color-text);
+  word-break: break-all;
+  direction: ltr;
+  font-weight: 600;
+}
+
+/* ============ Dots ============ */
+.loading-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.loading-dots span {
+  width: 10px;
+  height: 10px;
+  background: var(--color-secondary);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite;
+}
+
+.loading-dots span:nth-child(1) {
+  animation-delay: 0s;
+  background: var(--color-secondary);
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+  background: #4da6ff;
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+  background: var(--color-warning);
+}
+
+/* ============ Hint ============ */
+.loading-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+/* ============ Animations ============ */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.85;
+  }
+}
+
+@keyframes bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* ============ Responsive ============ */
+@media (max-width: 480px) {
+  .loading-content {
+    padding: 32px 24px;
+  }
+
+  .loading-spinner-wrapper {
+    width: 120px;
+    height: 120px;
+  }
+
+  .loading-icon {
+    font-size: 34px;
+  }
+
+  .loading-title {
+    font-size: 22px;
+  }
+
+  .loading-message {
+    font-size: 14px;
+  }
+
+  .loading-url-value {
+    font-size: 12px;
+  }
+}

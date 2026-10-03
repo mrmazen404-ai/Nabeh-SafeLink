@@ -1,0 +1,19 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Frontend dependencies and local build cache
+frontend/node_modules/
+
+# Logs and local reports
+*.log
+
+# Keep the production model explicitly tracked; do not add blanket *.joblib rules.

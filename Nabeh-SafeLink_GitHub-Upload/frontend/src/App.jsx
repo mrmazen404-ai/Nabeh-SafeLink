@@ -26,6 +26,7 @@ function MainApp() {
   const [activeTab, setActiveTab] = useState('home');
   const [initialScanUrl, setInitialScanUrl] = useState('');
   const [verifyEmail, setVerifyEmail] = useState('');
+  const [verifyType, setVerifyType] = useState('signup');
 
   useEffect(() => {
     if (!loading && isGuest) {
@@ -39,6 +40,7 @@ function MainApp() {
       window.history.replaceState(null, '', '/');
     }
     if (data.email) setVerifyEmail(data.email);
+    if (data.type) setVerifyType(data.type);
     setAuthPage(page);
     setViewState('auth_page');
   };
@@ -77,7 +79,7 @@ function MainApp() {
     if (authPage === 'register') return <Register onNavigate={handleNavigateAuth} />;
     if (authPage === 'forgot-password') return <ForgotPassword onNavigate={handleNavigateAuth} />;
     if (authPage === 'reset-password') return <ResetPassword onNavigate={handleNavigateAuth} />;
-    if (authPage === 'verify-otp') return <VerifyOtp onNavigate={handleNavigateAuth} email={verifyEmail} />;
+    if (authPage === 'verify-otp') return <VerifyOtp onNavigate={handleNavigateAuth} email={verifyEmail} type={verifyType} />;
   }
 
   return (
