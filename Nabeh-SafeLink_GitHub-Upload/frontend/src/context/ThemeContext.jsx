@@ -9,9 +9,6 @@ export function ThemeProvider({ children }) {
       if (savedTheme === 'dark' || savedTheme === 'light') {
         return savedTheme;
       }
-      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark';
-      }
     } catch (e) {
       console.error('Error reading theme from localStorage', e);
     }
