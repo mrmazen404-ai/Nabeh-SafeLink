@@ -99,17 +99,24 @@ def test_text_without_known_keywords_is_not_declared_safe():
 
 
 @pytest.mark.asyncio
-async def test_guest_scan_does_not_call_external_providers_or_database():
+async def test_guest_scan_calls_external_providers_without_persistence():
     with patch("app.scans.service.check_url_virustotal", new_callable=AsyncMock) as mock_vt, \
          patch("app.scans.service.generate_explanation", new_callable=AsyncMock) as mock_gemini, \
          patch("app.scans.service.predict_url", return_value={"classification": "UNKNOWN", "source": "MODEL_UNAVAILABLE"}), \
          patch("app.scans.service.supabase") as mock_supabase:
+        mock_vt.return_value = {"status": "UNKNOWN", "total_engines": 0}
+        mock_gemini.return_value = {
+            "summary": "unknown",
+            "reasons": [],
+            "recommendation": "caution",
+            "provider": "GEMINI",
+        }
         result = await ScanService.process_guest_scan("URL", "https://example.test", language="en")
 
         assert result["is_guest"] is True
         assert result["scan_id"] is None
         assert result["classification"] == "UNKNOWN"
-        assert result["virustotal"]["status"] == "NOT_REQUESTED"
-        mock_vt.assert_not_awaited()
-        mock_gemini.assert_not_awaited()
+        assert result["virustotal"]["status"] == "UNKNOWN"
+        mock_vt.assert_awaited_once_with("https://example.test")
+        mock_gemini.assert_awaited_once()
         mock_supabase.table.assert_not_called()

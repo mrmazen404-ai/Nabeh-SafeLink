@@ -140,59 +140,22 @@ class ScanService:
 
     @classmethod
     async def process_guest_scan(cls, input_type: str, raw_input: str, language: str = "ar") -> dict:
-        """Run the complete ML -> VirusTotal -> Gemini pipeline without persistence."""
+        """Guest scans use local analysis only: no database and no outbound provider calls."""
         extracted_url = cls.extract_url_from_text(raw_input)
         target_url = extracted_url if extracted_url else raw_input
-
-        # Stage 1: ML runs first. A text-only input is not a URL-model input.
+        vt_result = {"status": "NOT_REQUESTED", "malicious": 0, "suspicious": 0, "harmless": 0, "total_engines": 0}
         if input_type == "URL" or extracted_url:
             try:
                 ml_result = predict_url(target_url)
             except Exception:
-                logger.exception("guest_ml_analysis_failed")
-                ml_result = {"classification": "UNKNOWN", "confidence": None, "source": "ML_ERROR"}
-        else:
-            ml_result = {
-                "classification": "UNKNOWN",
-                "confidence": None,
-                "source": "ML_NOT_APPLICABLE_TO_TEXT",
-            }
-
-        # Stage 2: VirusTotal runs only when a URL exists. Guest results are
-        # never persisted, but the URL is sent to the external provider by design.
-        if input_type == "URL" or extracted_url:
-            try:
-                vt_result = await check_url_virustotal(target_url)
-            except Exception:
-                logger.exception("guest_virustotal_failed")
-                vt_result = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
+                logger.warning("guest_local_analysis_failed")
+                ml_result = {"classification": "UNKNOWN", "source": "LOCAL_ERROR"}
             combined = cls.combine_scan_results(vt_result, ml_result)
             if input_type == "TEXT" and extracted_url:
                 combined = cls._merge_text_signal(combined, cls.analyze_text_phishing(raw_input, has_embedded_url=True))
         else:
-            vt_result = {"status": "NOT_APPLICABLE", "total_engines": 0}
-            text_result = cls.analyze_text_phishing(raw_input)
-            combined = {
-                "classification": text_result["classification"],
-                "confidence": text_result["confidence"],
-                "weighted_score": None,
-                "source": "TEXT_SMS_ANALYZER",
-            }
-
-        combined["evidence"] = {"ml": ml_result, "virustotal": vt_result}
-
-        # Stage 3: Gemini creates the complete explanation; local fallback is
-        # explicitly marked when the provider is unavailable.
-        try:
-            explanation = await generate_explanation(
-                input_value=raw_input,
-                classification=combined["classification"],
-                evidence=combined.get("evidence", {}),
-                language=language,
-            )
-        except Exception:
-            logger.exception("guest_gemini_failed")
-            explanation = cls._local_explanation(combined["classification"], language)
+            ml_result = cls.analyze_text_phishing(raw_input)
+            combined = {"classification": ml_result["classification"], "confidence": ml_result["confidence"], "weighted_score": None, "source": "TEXT_SMS_ANALYZER"}
 
         return {
             "is_guest": True,
@@ -200,9 +163,9 @@ class ScanService:
             "input_value": raw_input,
             "extracted_url": extracted_url or None,
             "classification": combined["classification"],
-            "confidence": combined.get("confidence"),
+            "confidence": combined["confidence"],
             "source": combined["source"],
-            "explanation": explanation,
+            "explanation": cls._local_explanation(combined["classification"], language),
             "virustotal": vt_result,
             "ml_model": {
                 "classification": ml_result.get("classification", "UNKNOWN"),
@@ -233,17 +196,16 @@ class ScanService:
         vt_result, ml_result = {}, {}
 
         if input_type == "URL" or extracted_url:
-            # Authenticated pipeline order is intentionally ML -> VirusTotal.
-            try:
-                ml_result = predict_url(target_url)
-            except Exception:
-                logger.exception("authenticated_ml_analysis_failed")
-                ml_result = {"classification": "UNKNOWN", "source": "ML_ERROR"}
             try:
                 vt_result = await check_url_virustotal(target_url)
             except Exception:
-                logger.exception("authenticated_virustotal_failed")
-                vt_result = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
+                logger.warning("authenticated_virustotal_failed")
+                vt_result = {"status": "UNKNOWN"}
+            try:
+                ml_result = predict_url(target_url)
+            except Exception:
+                logger.warning("authenticated_ml_analysis_failed")
+                ml_result = {"classification": "UNKNOWN"}
             combined = cls.combine_scan_results(vt_result, ml_result)
             if input_type == "TEXT" and extracted_url:
                 combined = cls._merge_text_signal(combined, cls.analyze_text_phishing(raw_input, has_embedded_url=True))
@@ -251,15 +213,8 @@ class ScanService:
             ml_result = cls.analyze_text_phishing(raw_input)
             combined = {"classification": ml_result["classification"], "confidence": ml_result["confidence"], "source": "TEXT_SMS_ANALYZER"}
 
-        combined["evidence"] = {"ml": ml_result, "virustotal": vt_result}
-
         try:
-            explanation = await generate_explanation(
-                input_value=raw_input,
-                classification=combined["classification"],
-                evidence=combined.get("evidence", {}),
-                language=language,
-            )
+            explanation = await generate_explanation(input_value=raw_input, classification=combined["classification"], language=language)
         except Exception:
             logger.warning("authenticated_explanation_failed")
             explanation = cls._local_explanation(combined["classification"], language)

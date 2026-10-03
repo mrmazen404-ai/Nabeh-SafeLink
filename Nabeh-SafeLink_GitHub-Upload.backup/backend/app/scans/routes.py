@@ -54,7 +54,7 @@ def _validate_input(request: ScanRequest) -> str:
 
 @router.post("/guest")
 async def create_guest_scan(request: ScanRequest, response: Response):
-    """Run ML, VirusTotal, and Gemini for the guest without persistence."""
+    """Temporary local analysis only; this route never persists or calls external providers."""
     raw_input = _validate_input(request)
     response.headers["Cache-Control"] = "no-store, private"
     response.headers["Pragma"] = "no-cache"

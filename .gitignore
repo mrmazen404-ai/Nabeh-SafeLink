@@ -1,0 +1,20 @@
+.vercel/
+.env*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Frontend
+Nabeh-SafeLink_GitHub-Upload/frontend/node_modules/
+
+# Local ML artifacts are packaged into backend_bundle.zip, not committed separately
+Nabeh-SafeLink_GitHub-Upload/backend/app/ml/*.joblib
+Nabeh-SafeLink_GitHub-Upload/backend/app/ml/*_report.json
+
+# Logs and local outputs
+*.log
