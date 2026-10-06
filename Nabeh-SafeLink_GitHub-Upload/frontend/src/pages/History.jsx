@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { getScans } from '../services/api';
@@ -7,6 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 
 export default function History({ onQuickScan, activeTab, setActiveTab, isGuest = true, onNavigateAuth }) {
   const { t, dir } = useLanguage();
+  const navigate = useNavigate();
   const [scans, setScans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -144,7 +146,7 @@ export default function History({ onQuickScan, activeTab, setActiveTab, isGuest 
                   key={scan.id || idx}
                   type="button"
                   className="card"
-                  onClick={() => onQuickScan(displayVal)}
+                  onClick={() => scan.id ? navigate(`/scan-details/${encodeURIComponent(scan.id)}`) : onQuickScan(displayVal)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

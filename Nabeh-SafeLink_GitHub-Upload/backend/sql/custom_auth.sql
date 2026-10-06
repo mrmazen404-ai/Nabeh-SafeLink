@@ -33,8 +33,11 @@ create index if not exists custom_auth_otps_lookup_idx
   where consumed_at is null;
 
 -- The backend uses the service key and enforces ownership from its JWT.
--- Existing projects may have foreign keys from these tables to auth.users.
--- Remove those Auth-only constraints because custom_users owns identity now.
+-- custom_users is the only identity table used by the custom-auth backend.
+-- Existing installations may still have user_profiles.user_id pointing to
+-- the old public.users or auth.users table. That legacy relationship must not
+-- be used by registration; the profile table is optional and unused by the
+-- current backend because custom_users stores display_name and language.
 do $$
 declare
   constraint_row record;
@@ -43,13 +46,9 @@ begin
     select conrelid::regclass as table_name, conname
     from pg_constraint
     where contype = 'f'
-      and confrelid = 'auth.users'::regclass
-      and conrelid in ('public.user_profiles'::regclass, 'public.scans'::regclass)
+      and conrelid = 'public.user_profiles'::regclass
+      and conname is not null
   loop
     execute format('alter table %s drop constraint if exists %I', constraint_row.table_name, constraint_row.conname);
   end loop;
 end $$;
-
--- Existing rows created with Supabase Auth are intentionally not auto-mapped:
--- passwords cannot be extracted from auth.users. Users must register again or
--- use an administrator-led migration process outside this application.

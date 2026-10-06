@@ -6,9 +6,11 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 from app.db.supabase_client import supabase
+from app.observability import log_event, resource_id
 from app.gemini.client import generate_explanation
 from app.ml.predictor import predict_url
 from app.virustotal.client import check_url_virustotal
+from app.dashboard.realtime import manager
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +64,17 @@ class ScanService:
 
     @staticmethod
     def combine_scan_results(vt_result: dict, ml_result: dict) -> dict:
-        """Combine only validated evidence; missing/unknown scanners never produce SAFE."""
+        """Combine 3-Stage Scan Results (Stage 1: ML, Stage 2: VirusTotal) into an accurate verdict.
+
+        Core security principle: ML alone is NEVER sufficient for DANGEROUS classification.
+        DANGEROUS requires either:
+          (a) VirusTotal with 3+ malicious engines, OR
+          (b) VirusTotal with 1-2 malicious AND ML corroboration (high confidence)
+        """
         vt_result = vt_result or {}
         ml_result = ml_result or {}
         vt_status = str(vt_result.get("status", "UNKNOWN")).upper()
+
         try:
             vt_malicious = max(0, int(vt_result.get("malicious", 0) or 0))
             vt_suspicious = max(0, int(vt_result.get("suspicious", 0) or 0))
@@ -74,51 +83,161 @@ class ScanService:
         except (TypeError, ValueError):
             vt_malicious = vt_suspicious = vt_harmless = vt_total = 0
             vt_status = "UNKNOWN"
+
         has_vt = vt_total > 0 and vt_status in {"SAFE", "SUSPICIOUS", "DANGEROUS"}
 
         ml_class = str(ml_result.get("classification", "UNKNOWN")).upper()
+        ml_source = str(ml_result.get("source", ""))
         ml_prob = ml_result.get("phishing_prob")
         try:
             ml_prob = float(ml_prob)
             has_ml = ml_class in {"SAFE", "SUSPICIOUS", "DANGEROUS"} and 0.0 <= ml_prob <= 1.0
         except (TypeError, ValueError):
             ml_prob, has_ml = None, False
-        if ml_result.get("source") == "WHITELIST":
+
+        if ml_source == "WHITELIST":
             has_ml = False
 
-        # Confirmed high-signal detections take precedence over safe/unknown output.
-        if vt_malicious >= 3 or (has_ml and ml_class == "DANGEROUS" and ml_prob >= 0.60):
-            return {"classification": "DANGEROUS", "confidence": max(0.85, float(ml_prob or 0)), "weighted_score": float(ml_prob or 1), "source": "RISK_SIGNAL"}
+        # ═══════════════════════════════════════════════════════════════════
+        # TIER 0: Verified Safe Domain Whitelist
+        # ═══════════════════════════════════════════════════════════════════
+        if ml_source == "VERIFIED_SAFE_DOMAIN" and vt_malicious == 0:
+            return {
+                "classification": "SAFE",
+                "confidence": 0.99,
+                "weighted_score": 0.01,
+                "source": "VERIFIED_SAFE_DOMAIN",
+            }
+
+        # ═══════════════════════════════════════════════════════════════════
+        # TIER 1: DANGEROUS — requires STRONG evidence
+        # ═══════════════════════════════════════════════════════════════════
+
+        # Rule 1a: VirusTotal strong consensus (3+ engines flag as malicious)
+        if vt_malicious >= 3:
+            # Confidence scales with # of engines
+            confidence = min(0.99, 0.85 + (vt_malicious - 3) * 0.02)
+            return {
+                "classification": "DANGEROUS",
+                "confidence": round(confidence, 4),
+                "weighted_score": 1.0,
+                "source": f"VIRUSTOTAL_CONSENSUS ({vt_malicious} engines)",
+            }
+
+        # Rule 1b: VirusTotal moderate (1-2) + ML corroboration at high confidence
+        if vt_malicious >= 1 and has_ml and ml_class == "DANGEROUS" and ml_prob >= 0.85:
+            # Two independent signals agree
+            confidence = min(0.95, 0.75 + (ml_prob - 0.85) * 1.5)
+            return {
+                "classification": "DANGEROUS",
+                "confidence": round(confidence, 4),
+                "weighted_score": round(ml_prob, 4),
+                "source": f"DANGEROUS_CORROBORATED (VT:{vt_malicious} + ML:{ml_prob:.2f})",
+            }
+
+        # ═══════════════════════════════════════════════════════════════════
+        # TIER 2: SUSPICIOUS — moderate evidence
+        # ═══════════════════════════════════════════════════════════════════
+
+        # Rule 2a: VirusTotal has malicious OR multiple suspicious signals
         if vt_malicious >= 1 or vt_suspicious >= 2:
-            return {"classification": "SUSPICIOUS", "confidence": 0.65, "weighted_score": None, "source": "VIRUSTOTAL_SIGNAL"}
+            return {
+                "classification": "SUSPICIOUS",
+                "confidence": 0.65,
+                "weighted_score": float(ml_prob or 0.5),
+                "source": f"VIRUSTOTAL_SIGNAL (M:{vt_malicious}, S:{vt_suspicious})",
+            }
 
-        if not has_vt and not has_ml:
-            return {"classification": "UNKNOWN", "confidence": None, "weighted_score": None, "source": "INSUFFICIENT_EVIDENCE"}
+        # Rule 2b: ML strong signal alone → maximum SUSPICIOUS (never DANGEROUS)
+        if has_ml and ml_class == "DANGEROUS" and ml_prob >= 0.60:
+            return {
+                "classification": "SUSPICIOUS",
+                "confidence": round(min(0.75, ml_prob * 0.9), 4),
+                "weighted_score": round(ml_prob, 4),
+                "source": "ML_SIGNAL_ONLY",
+            }
 
+        # Rule 2c: ML suspicious signal
+        if has_ml and ml_class == "SUSPICIOUS":
+            return {
+                "classification": "SUSPICIOUS",
+                "confidence": round(float(ml_prob or 0.55) * 0.8, 4),
+                "weighted_score": round(float(ml_prob or 0.5), 4),
+                "source": "ML_SUSPICIOUS_SIGNAL",
+            }
+
+        # ═══════════════════════════════════════════════════════════════════
+        # TIER 3: SAFE — requires positive evidence from both sources
+        # ═══════════════════════════════════════════════════════════════════
+
+        # Rule 3a: Both VT and ML agree on SAFE
+        if has_vt and has_ml and vt_status == "SAFE" and ml_class == "SAFE":
+            # Confidence = average of both
+            vt_conf = float(vt_result.get("confidence") or 0.85)
+            ml_conf = 1.0 - ml_prob  # phishing_prob = 0 → confidence = 1
+            confidence = min(0.95, (vt_conf + ml_conf) / 2)
+            return {
+                "classification": "SAFE",
+                "confidence": round(confidence, 4),
+                "weighted_score": round(ml_prob, 4),
+                "source": "HYBRID_CONSENSUS_SAFE",
+            }
+
+        # Rule 3b: VT clean + ML unknown → SAFE (VT is authoritative)
+        if has_vt and vt_status == "SAFE" and vt_harmless > 0 and vt_malicious == 0 and vt_suspicious == 0:
+            confidence = float(vt_result.get("confidence") or 0.85)
+            return {
+                "classification": "SAFE",
+                "confidence": round(confidence, 4),
+                "weighted_score": None,
+                "source": "VIRUSTOTAL_CLEAN",
+            }
+
+        # Rule 3c: ML safe + VT unknown → SAFE (ML alone is OK for SAFE, but with lower confidence)
+        if has_ml and ml_class == "SAFE" and not has_vt:
+            confidence = min(0.80, 1.0 - ml_prob)  # Cap at 0.80 for ML-only SAFE
+            return {
+                "classification": "SAFE",
+                "confidence": round(confidence, 4),
+                "weighted_score": round(ml_prob, 4),
+                "source": "ML_SAFE_ONLY",
+            }
+
+        # ═══════════════════════════════════════════════════════════════════
+        # TIER 4: Hybrid weighted score (fallback for edge cases)
+        # ═══════════════════════════════════════════════════════════════════
         if has_vt and has_ml:
             vt_score = min(1.0, (vt_malicious + (vt_suspicious * 0.5)) / max(1.0, vt_total * 0.10))
             score = (0.55 * vt_score) + (0.45 * ml_prob)
-            if score >= 0.60:
+
+            if score >= 0.70:
                 classification = "DANGEROUS"
-            elif score >= 0.35 or vt_status == "SUSPICIOUS" or ml_class == "SUSPICIOUS":
+            elif score >= 0.40:
                 classification = "SUSPICIOUS"
             else:
                 classification = "SAFE"
-            confidence = round(max(score, 0.65) if classification != "SAFE" else 1.0 - score, 4)
-            return {"classification": classification, "confidence": confidence, "weighted_score": round(score, 4), "source": "HYBRID_DECISION_MATRIX (VT + ML)"}
 
-        if has_vt:
-            if vt_status == "SAFE" and vt_harmless > 0 and vt_malicious == 0 and vt_suspicious == 0:
-                classification = "SAFE"
+            # Confidence reflects the score, but never reaches 0.99 from weighted alone
+            if classification == "SAFE":
+                confidence = max(0.70, 1.0 - score)
             else:
-                classification = "SUSPICIOUS" if vt_status == "SAFE" else vt_status
-            return {"classification": classification, "confidence": float(vt_result.get("confidence") or 0.65), "weighted_score": None, "source": "VIRUSTOTAL"}
+                confidence = round(min(0.88, 0.60 + score * 0.3), 4)
 
+            return {
+                "classification": classification,
+                "confidence": round(confidence, 4),
+                "weighted_score": round(score, 4),
+                "source": "HYBRID_WEIGHTED",
+            }
+
+        # ═══════════════════════════════════════════════════════════════════
+        # TIER 5: Insufficient evidence → UNKNOWN (never fabricate)
+        # ═══════════════════════════════════════════════════════════════════
         return {
-            "classification": ml_class,
-            "confidence": float(ml_result.get("confidence") or 0.65),
-            "weighted_score": ml_prob,
-            "source": f"ML_MODEL ({ml_result.get('source', 'LOCAL')})",
+            "classification": "UNKNOWN",
+            "confidence": None,
+            "weighted_score": None,
+            "source": "INSUFFICIENT_EVIDENCE",
         }
 
     @staticmethod
@@ -139,69 +258,65 @@ class ScanService:
         return {"summary": text, "reasons": [], "recommendation": recommendation, "provider": "LOCAL_RULES"}
 
     @classmethod
-    async def process_guest_scan(cls, input_type: str, raw_input: str, language: str = "ar") -> dict:
-        """Run the complete ML -> VirusTotal -> Gemini pipeline without persistence."""
-        extracted_url = cls.extract_url_from_text(raw_input)
-        target_url = extracted_url if extracted_url else raw_input
+    async def process_url_scan(cls, target_url: str, language: str = "ar") -> dict:
+        """Standalone 3-Stage URL Link Scanner (ML -> VirusTotal -> Gemini Research)."""
+        try:
+            ml_result = predict_url(target_url)
+        except Exception:
+            logger.exception("url_ml_analysis_failed")
+            ml_result = {"classification": "UNKNOWN", "confidence": None, "source": "ML_ERROR"}
 
-        # Stage 1: ML runs first. A text-only input is not a URL-model input.
-        if input_type == "URL" or extracted_url:
-            try:
-                ml_result = predict_url(target_url)
-            except Exception:
-                logger.exception("guest_ml_analysis_failed")
-                ml_result = {"classification": "UNKNOWN", "confidence": None, "source": "ML_ERROR"}
-        else:
-            ml_result = {
-                "classification": "UNKNOWN",
-                "confidence": None,
-                "source": "ML_NOT_APPLICABLE_TO_TEXT",
-            }
+        try:
+            vt_result = await check_url_virustotal(target_url)
+        except Exception:
+            logger.exception("url_virustotal_failed")
+            vt_result = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
 
-        # Stage 2: VirusTotal runs only when a URL exists. Guest results are
-        # never persisted, but the URL is sent to the external provider by design.
-        if input_type == "URL" or extracted_url:
-            try:
-                vt_result = await check_url_virustotal(target_url)
-            except Exception:
-                logger.exception("guest_virustotal_failed")
-                vt_result = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
-            combined = cls.combine_scan_results(vt_result, ml_result)
-            if input_type == "TEXT" and extracted_url:
-                combined = cls._merge_text_signal(combined, cls.analyze_text_phishing(raw_input, has_embedded_url=True))
-        else:
-            vt_result = {"status": "NOT_APPLICABLE", "total_engines": 0}
-            text_result = cls.analyze_text_phishing(raw_input)
-            combined = {
-                "classification": text_result["classification"],
-                "confidence": text_result["confidence"],
-                "weighted_score": None,
-                "source": "TEXT_SMS_ANALYZER",
-            }
+        combined = cls.combine_scan_results(vt_result, ml_result)
+        combined["evidence"] = {"ml": ml_result, "virustotal": vt_result, "input_type": "URL"}
 
-        combined["evidence"] = {"ml": ml_result, "virustotal": vt_result}
-
-        # Stage 3: Gemini creates the complete explanation; local fallback is
-        # explicitly marked when the provider is unavailable.
         try:
             explanation = await generate_explanation(
-                input_value=raw_input,
+                input_value=target_url,
                 classification=combined["classification"],
                 evidence=combined.get("evidence", {}),
                 language=language,
             )
         except Exception:
-            logger.exception("guest_gemini_failed")
+            logger.exception("url_gemini_failed")
             explanation = cls._local_explanation(combined["classification"], language)
 
         return {
-            "is_guest": True,
-            "scan_id": None,
-            "input_value": raw_input,
-            "extracted_url": extracted_url or None,
+            "scan_kind": "URL_LINK",
+            "input_type": "URL",
+            "input_value": target_url,
+            "extracted_url": target_url,
             "classification": combined["classification"],
             "confidence": combined.get("confidence"),
             "source": combined["source"],
+            "stages": {
+                "stage1_ml": {
+                    "name": "Stage 1: LightGBM ML Model Analysis",
+                    "classification": ml_result.get("classification", "UNKNOWN"),
+                    "confidence": ml_result.get("confidence"),
+                    "phishing_prob": ml_result.get("phishing_prob"),
+                    "source": ml_result.get("source", "N/A"),
+                },
+                "stage2_virustotal": {
+                    "name": "Stage 2: VirusTotal 92+ Engines Intelligence",
+                    "status": vt_result.get("status", "UNKNOWN"),
+                    "malicious": vt_result.get("malicious", 0),
+                    "suspicious": vt_result.get("suspicious", 0),
+                    "harmless": vt_result.get("harmless", 0),
+                    "total_engines": vt_result.get("total_engines", 0),
+                },
+                "stage3_gemini": {
+                    "name": "Stage 3: Gemini AI URL Threat Research",
+                    "provider": explanation.get("provider", "TEMPLATE"),
+                    "summary": explanation.get("summary", ""),
+                    "recommendation": explanation.get("recommendation", ""),
+                },
+            },
             "explanation": explanation,
             "virustotal": vt_result,
             "ml_model": {
@@ -211,6 +326,117 @@ class ScanService:
                 "source": ml_result.get("source", "N/A"),
             },
         }
+
+    @classmethod
+    async def process_text_scan(cls, text_content: str, language: str = "ar") -> dict:
+        """Standalone SMS / Text Message Smishing Scanner (Text NLP -> Embedded Link Audit -> Gemini Research)."""
+        extracted_url = cls.extract_url_from_text(text_content)
+        vt_result, ml_result = {}, {}
+
+        if extracted_url:
+            try:
+                ml_result = predict_url(extracted_url)
+            except Exception:
+                logger.exception("sms_ml_analysis_failed")
+                ml_result = {"classification": "UNKNOWN", "confidence": None, "source": "ML_ERROR"}
+
+            try:
+                vt_result = await check_url_virustotal(extracted_url)
+            except Exception:
+                logger.exception("sms_virustotal_failed")
+                vt_result = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
+
+            combined = cls.combine_scan_results(vt_result, ml_result)
+            text_signal = cls.analyze_text_phishing(text_content, has_embedded_url=True)
+            combined = cls._merge_text_signal(combined, text_signal)
+        else:
+            text_signal = cls.analyze_text_phishing(text_content)
+            combined = {
+                "classification": text_signal["classification"],
+                "confidence": text_signal["confidence"],
+                "weighted_score": None,
+                "source": "SMS_TEXT_ANALYZER",
+            }
+            vt_result = {"status": "NOT_APPLICABLE", "total_engines": 0}
+
+        combined["evidence"] = {
+            "ml": ml_result,
+            "virustotal": vt_result,
+            "input_type": "TEXT",
+            "extracted_url": extracted_url,
+            "keyword_matches": cls.analyze_text_phishing(text_content).get("keyword_matches", []),
+        }
+
+        try:
+            explanation = await generate_explanation(
+                input_value=text_content,
+                classification=combined["classification"],
+                evidence=combined.get("evidence", {}),
+                language=language,
+            )
+        except Exception:
+            logger.exception("sms_gemini_failed")
+            explanation = cls._local_explanation(combined["classification"], language)
+
+        return {
+            "scan_kind": "SMS_TEXT",
+            "input_type": "TEXT",
+            "input_value": text_content,
+            "extracted_url": extracted_url or None,
+            "classification": combined["classification"],
+            "confidence": combined.get("confidence"),
+            "source": combined["source"],
+            "text_analysis": {
+                "has_embedded_url": bool(extracted_url),
+                "extracted_url": extracted_url or None,
+                "phishing_keywords": cls.analyze_text_phishing(text_content).get("keyword_matches", []),
+            },
+            "stages": {
+                "stage1_text_nlp": {
+                    "name": "Stage 1: SMS Phishing & Lure NLP Analysis",
+                    "classification": combined["classification"],
+                    "confidence": combined.get("confidence"),
+                    "source": combined.get("source"),
+                },
+                "stage2_link_audit": {
+                    "name": "Stage 2: Embedded Link Security Audit",
+                    "status": vt_result.get("status", "NOT_APPLICABLE"),
+                    "malicious": vt_result.get("malicious", 0),
+                    "suspicious": vt_result.get("suspicious", 0),
+                    "total_engines": vt_result.get("total_engines", 0),
+                },
+                "stage3_gemini_sms": {
+                    "name": "Stage 3: Gemini AI Smishing & Fraud Research",
+                    "provider": explanation.get("provider", "TEMPLATE"),
+                    "summary": explanation.get("summary", ""),
+                    "recommendation": explanation.get("recommendation", ""),
+                },
+            },
+            "explanation": explanation,
+            "virustotal": vt_result,
+            "ml_model": {
+                "classification": ml_result.get("classification", "UNKNOWN"),
+                "confidence": ml_result.get("confidence"),
+                "phishing_prob": ml_result.get("phishing_prob"),
+                "source": ml_result.get("source", "N/A"),
+            },
+        }
+
+    @classmethod
+    async def process_guest_scan(cls, input_type: str, raw_input: str, language: str = "ar") -> dict:
+        """Process guest scan routing cleanly between URL and SMS Text pipelines."""
+        operation_id = resource_id(raw_input)
+        log_event(logger, logging.INFO, "guest_scan_started", operation_id=operation_id, input_type=input_type, language=language)
+        if input_type == "TEXT":
+            scan_res = await cls.process_text_scan(raw_input, language=language)
+        else:
+            target = cls.extract_url_from_text(raw_input) or raw_input
+            scan_res = await cls.process_url_scan(target, language=language)
+            scan_res["input_value"] = raw_input
+        scan_res["is_guest"] = True
+        scan_res["scan_id"] = None
+        log_event(logger, logging.INFO, "guest_scan_finished", operation_id=operation_id, classification=scan_res.get("classification"))
+        return scan_res
 
     @staticmethod
     def _mask_input(input_type: str, raw_input: str) -> str:
@@ -228,41 +454,17 @@ class ScanService:
     async def process_authenticated_scan(cls, input_type: str, raw_input: str, user_id: str, language: str = "ar") -> dict:
         if not user_id:
             raise ScanPersistenceError("verified user ID required")
-        extracted_url = cls.extract_url_from_text(raw_input)
-        target_url = extracted_url if extracted_url else raw_input
-        vt_result, ml_result = {}, {}
 
-        if input_type == "URL" or extracted_url:
-            # Authenticated pipeline order is intentionally ML -> VirusTotal.
-            try:
-                ml_result = predict_url(target_url)
-            except Exception:
-                logger.exception("authenticated_ml_analysis_failed")
-                ml_result = {"classification": "UNKNOWN", "source": "ML_ERROR"}
-            try:
-                vt_result = await check_url_virustotal(target_url)
-            except Exception:
-                logger.exception("authenticated_virustotal_failed")
-                vt_result = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
-            combined = cls.combine_scan_results(vt_result, ml_result)
-            if input_type == "TEXT" and extracted_url:
-                combined = cls._merge_text_signal(combined, cls.analyze_text_phishing(raw_input, has_embedded_url=True))
+        operation_id = resource_id(raw_input)
+        log_event(logger, logging.INFO, "authenticated_scan_started", operation_id=operation_id, input_type=input_type, language=language)
+        if input_type == "TEXT":
+            scan_res = await cls.process_text_scan(raw_input, language=language)
         else:
-            ml_result = cls.analyze_text_phishing(raw_input)
-            combined = {"classification": ml_result["classification"], "confidence": ml_result["confidence"], "source": "TEXT_SMS_ANALYZER"}
+            target = cls.extract_url_from_text(raw_input) or raw_input
+            scan_res = await cls.process_url_scan(target, language=language)
+            scan_res["input_value"] = raw_input
 
-        combined["evidence"] = {"ml": ml_result, "virustotal": vt_result}
-
-        try:
-            explanation = await generate_explanation(
-                input_value=raw_input,
-                classification=combined["classification"],
-                evidence=combined.get("evidence", {}),
-                language=language,
-            )
-        except Exception:
-            logger.warning("authenticated_explanation_failed")
-            explanation = cls._local_explanation(combined["classification"], language)
+        scan_res["is_guest"] = False
 
         try:
             now_iso = datetime.now(timezone.utc).isoformat()
@@ -271,63 +473,84 @@ class ScanService:
                 "input_type": input_type,
                 "input_value_masked": cls._mask_input(input_type, raw_input),
                 "status": "COMPLETED",
-                "classification": combined["classification"],
-                "confidence_score": float(combined.get("confidence") or 0.0),
-                "confidence_level": "HIGH" if (combined.get("confidence") or 0) >= 0.8 else "MEDIUM",
-                "recommendation": explanation.get("recommendation", ""),
+                "classification": scan_res["classification"],
+                "confidence_score": float(scan_res.get("confidence") or 0.0),
+                "confidence_level": "HIGH" if (scan_res.get("confidence") or 0) >= 0.8 else "MEDIUM",
+                "recommendation": scan_res.get("explanation", {}).get("recommendation", ""),
                 "completed_at": now_iso,
             }
             saved = supabase.table("scans").insert(scan_data).execute()
-            if not saved.data:
-                raise RuntimeError("scan row not returned")
-            scan_id = saved.data[0].get("id")
-            if not scan_id:
-                raise RuntimeError("scan ID not returned")
+            if saved.data:
+                scan_id = saved.data[0].get("id")
+                scan_res["scan_id"] = scan_id
+                try:
+                    supabase.table("scans").update({"analysis_snapshot": scan_res.get("stages", {})}).eq("id", scan_id).eq("user_id", user_id).execute()
+                except Exception:
+                    # Older installations can apply the additive SQL migration later;
+                    # the scan itself must not fail merely because the optional snapshot is absent.
+                    logger.warning("analysis_snapshot_persistence_skipped")
 
-            explanation_data = {
-                "scan_id": scan_id,
-                "language": language,
-                "summary": explanation.get("summary", ""),
-                "reasons": explanation.get("reasons", []),
-                "recommendation": explanation.get("recommendation", ""),
-                "provider": explanation.get("provider", "TEMPLATE"),
-            }
-            supabase.table("scan_explanations").insert(explanation_data).execute()
+                explanation = scan_res.get("explanation", {})
+                raw_provider = str(explanation.get("provider", "TEMPLATE")).upper()
+                if "GEMINI" in raw_provider:
+                    provider = "GEMINI"
+                elif "LOCAL" in raw_provider or "RULES" in raw_provider:
+                    provider = "LOCAL_RULES"
+                elif "HUMAN" in raw_provider:
+                    provider = "HUMAN_REVIEW"
+                elif raw_provider in {"TEMPLATE", "GEMINI", "HUMAN_REVIEW", "LOCAL_RULES"}:
+                    provider = raw_provider
+                else:
+                    provider = "TEMPLATE"
 
-            signals = []
-            if vt_result.get("malicious", 0) > 0:
-                signals.append({"scan_id": scan_id, "signal_code": "VT_MALICIOUS_DETECTION", "signal_label_en": "VirusTotal malicious detections", "signal_label_ar": "رصدت خدمة الفحص مؤشرات ضارة", "severity": 5, "source": "VIRUSTOTAL"})
-            if ml_result.get("phishing_prob", 0) and ml_result.get("phishing_prob", 0) > 0.5:
-                signals.append({"scan_id": scan_id, "signal_code": "ML_PHISHING_PROBABILITY", "signal_label_en": "Elevated model phishing score", "signal_label_ar": "مؤشر مرتفع لاحتمال التصيد", "severity": 4, "source": "LIGHTGBM_ML"})
-            if signals:
-                supabase.table("scan_signals").insert(signals).execute()
+                explanation_data = {
+                    "scan_id": scan_id,
+                    "language": language,
+                    "summary": explanation.get("summary", ""),
+                    "reasons": explanation.get("reasons", []),
+                    "recommendation": explanation.get("recommendation", ""),
+                    "provider": provider,
+                }
+                try:
+                    supabase.table("scan_explanations").insert(explanation_data).execute()
+                except Exception:
+                    logger.warning("scan_explanation_persistence_failed")
+                event = {
+                    "type": "scan_completed",
+                    "scan_id": scan_id,
+                    "classification": scan_res.get("classification", "UNKNOWN"),
+                    "confidence": scan_res.get("confidence"),
+                    "created_at": now_iso,
+                    "title": "اكتمل فحص جديد",
+                }
+                await manager.broadcast(user_id, event)
+                if scan_res.get("classification") == "DANGEROUS":
+                    notification = {
+                        "user_id": user_id,
+                        "scan_id": scan_id,
+                        "type": "DANGEROUS_RESULT",
+                        "title": "تنبيه أمني عاجل",
+                        "body": "تم اكتشاف نتيجة خطيرة في آخر فحص. لا تفتح الرابط ولا تدخل بياناتك.",
+                    }
+                    try:
+                        saved_notification = supabase.table("notifications").insert(notification).execute()
+                        notification_data = (saved_notification.data or [notification])[0]
+                    except Exception:
+                        logger.warning("dangerous_notification_persistence_failed")
+                        notification_data = notification
+                    await manager.broadcast(user_id, {
+                        "type": "security_alert",
+                        "severity": "critical",
+                        "notification": notification_data,
+                        "created_at": now_iso,
+                    })
+                log_event(logger, logging.INFO, "authenticated_scan_persisted", operation_id=operation_id, scan_id=scan_id)
         except Exception:
             logger.error("authenticated_scan_persistence_failed")
             raise ScanPersistenceError("scan persistence failed") from None
 
-        return {
-            "is_guest": False,
-            "scan_id": scan_id,
-            "input_value": raw_input,
-            "extracted_url": extracted_url or None,
-            "classification": combined["classification"],
-            "confidence": combined.get("confidence"),
-            "source": combined["source"],
-            "explanation": explanation,
-            "virustotal": {
-                "status": vt_result.get("status", "UNKNOWN"),
-                "malicious": vt_result.get("malicious", 0),
-                "suspicious": vt_result.get("suspicious", 0),
-                "harmless": vt_result.get("harmless", 0),
-                "total_engines": vt_result.get("total_engines", 0),
-            },
-            "ml_model": {
-                "classification": ml_result.get("classification", "UNKNOWN"),
-                "confidence": ml_result.get("confidence"),
-                "phishing_prob": ml_result.get("phishing_prob"),
-                "source": ml_result.get("source", "N/A"),
-            },
-        }
+        log_event(logger, logging.INFO, "authenticated_scan_finished", operation_id=operation_id, classification=scan_res.get("classification"))
+        return scan_res
 
     @staticmethod
     async def get_recent_scans(limit: int = 50, user_id: str = None) -> list:

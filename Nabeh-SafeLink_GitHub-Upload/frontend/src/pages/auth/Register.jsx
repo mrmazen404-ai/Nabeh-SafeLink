@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Logo from '../../components/Logo';
 import { useAuth } from '../../context/AuthContext';
 import { AlertTriangleIcon, ArrowLeftIcon, ArrowRightIcon, UserIcon } from '../../components/Icons';
@@ -17,6 +17,10 @@ function EyeIcon({ size = 20, color = 'currentColor' }) {
 
 function EyeOffIcon({ size = 20, color = 'currentColor' }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 3 18 18M10.6 6.2A10.6 10.6 0 0 1 12 6c6.5 0 10 6 10 6a18.7 18.7 0 0 1-3.1 3.8M6.3 6.3C3.6 8.1 2 12 2 12s3.5 6 10 6c1.2 0 2.3-.2 3.3-.6" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>;
+}
+
+function CheckIcon({ size = 16, color = 'currentColor' }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>;
 }
 
 function GoogleIcon() {
@@ -39,6 +43,20 @@ export default function Register({ onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const timerRef = useRef(null);
+
+  // Password criteria checklist states
+  const hasLength = password.length >= 12;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSymbol = /[^A-Za-z0-9]/.test(password);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -50,7 +68,7 @@ export default function Register({ onNavigate }) {
       setError(t('auth.passwordMismatch'));
       return;
     }
-    if (password.length < 12) {
+    if (!hasLength || !hasUpper || !hasLower || !hasNumber) {
       setError(t('auth.passwordLength'));
       return;
     }
@@ -59,10 +77,12 @@ export default function Register({ onNavigate }) {
     setLoading(true);
     try {
       const response = await register(email.trim(), password, displayName.trim());
-      setSuccessMsg(response.message || 'إذا كان البريد الإلكتروني صحيحاً، فستصلك تعليمات تأكيد الحساب');
-      setTimeout(() => onNavigate('verify-otp', { email: email.trim() }), 2000);
-    } catch {
-      setError('تعذر إنشاء الحساب. تأكد من البيانات أو حاول مجدداً.');
+      setSuccessMsg(response.message || t('auth.registerSuccessDefault'));
+      timerRef.current = setTimeout(() => onNavigate('verify-otp', { email: email.trim() }), 1800);
+    } catch (requestError) {
+      const serverDetail = requestError?.response?.data?.detail;
+      const status = requestError?.response?.status;
+      setError(serverDetail || (status === 503 ? t('auth.emailDeliveryError') : t('auth.registerError')));
     } finally {
       setLoading(false);
     }
@@ -82,19 +102,54 @@ export default function Register({ onNavigate }) {
         </section>
 
         <form className="login-form" onSubmit={handleSubmit} noValidate>
-          <label className="login-field"><span className="login-field-icon"><UserIcon size={19} color="currentColor" /></span><input type="text" autoComplete="name" placeholder={t('auth.fullName')} value={displayName} onChange={(event) => setDisplayName(event.target.value)} aria-label={t('auth.fullName')} /></label>
-          <label className="login-field"><span className="login-field-icon"><UserIcon size={19} color="currentColor" /></span><input type="email" autoComplete="email" placeholder={t('auth.emailAddress')} value={email} onChange={(event) => setEmail(event.target.value)} aria-label={t('auth.emailAddress')} /></label>
-          <label className="login-field"><span className="login-field-icon"><LockIcon size={19} color="currentColor" /></span><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" maxLength={128} placeholder={t('auth.password')} value={password} onChange={(event) => setPassword(event.target.value)} aria-label={t('auth.password')} /><button type="button" className="login-password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}>{showPassword ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}</button></label>
-          <label className="login-field"><span className="login-field-icon"><LockIcon size={19} color="currentColor" /></span><input type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" maxLength={128} placeholder={t('auth.confirmPassword')} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} aria-label={t('auth.confirmPassword')} /><button type="button" className="login-password-toggle" onClick={() => setShowConfirmPassword((value) => !value)} aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}>{showConfirmPassword ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}</button></label>
+          <label className="login-field">
+            <span className="login-field-icon"><UserIcon size={19} color="currentColor" /></span>
+            <input type="text" dir={dir} autoComplete="name" placeholder={t('auth.fullName')} value={displayName} onChange={(event) => { setDisplayName(event.target.value); setError(''); }} aria-label={t('auth.fullName')} required />
+          </label>
 
-          {error && <div className="login-error" role="alert"><AlertTriangleIcon size={17} color="currentColor" /><span>{error}</span></div>}
-          {successMsg && <div className="register-success" role="status">{successMsg}</div>}
+          <label className="login-field">
+            <span className="login-field-icon"><UserIcon size={19} color="currentColor" /></span>
+            <input type="email" dir={dir} autoComplete="email" placeholder={t('auth.emailAddress')} value={email} onChange={(event) => { setEmail(event.target.value); setError(''); }} aria-label={t('auth.emailAddress')} required />
+          </label>
+
+          <label className="login-field">
+            <span className="login-field-icon"><LockIcon size={19} color="currentColor" /></span>
+            <input type={showPassword ? 'text' : 'password'} dir={dir} autoComplete="new-password" maxLength={128} placeholder={t('auth.password')} value={password} onChange={(event) => { setPassword(event.target.value); setError(''); }} aria-label={t('auth.password')} required />
+            <button type="button" className="login-password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}>{showPassword ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}</button>
+          </label>
+
+          {/* Password criteria checklist */}
+          {password.length > 0 && (
+            <div className="password-criteria-box" aria-label="Password requirements checklist">
+              <p className="criteria-title">{t('auth.passwordCriteriaTitle')}</p>
+              <ul className="criteria-list">
+                <li className={hasLength ? 'met' : 'unmet'}><span className="criteria-icon"><CheckIcon size={13} /></span><span>{t('auth.criteriaLength')}</span></li>
+                <li className={hasUpper ? 'met' : 'unmet'}><span className="criteria-icon"><CheckIcon size={13} /></span><span>{t('auth.criteriaUppercase')}</span></li>
+                <li className={hasLower ? 'met' : 'unmet'}><span className="criteria-icon"><CheckIcon size={13} /></span><span>{t('auth.criteriaLowercase')}</span></li>
+                <li className={hasNumber ? 'met' : 'unmet'}><span className="criteria-icon"><CheckIcon size={13} /></span><span>{t('auth.criteriaNumber')}</span></li>
+                <li className={hasSymbol ? 'met' : 'unmet'}><span className="criteria-icon"><CheckIcon size={13} /></span><span>{t('auth.criteriaSymbol')}</span></li>
+              </ul>
+            </div>
+          )}
+
+          <label className="login-field">
+            <span className="login-field-icon"><LockIcon size={19} color="currentColor" /></span>
+            <input type={showConfirmPassword ? 'text' : 'password'} dir={dir} autoComplete="new-password" maxLength={128} placeholder={t('auth.confirmPassword')} value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError(''); }} aria-label={t('auth.confirmPassword')} required />
+            <button type="button" className="login-password-toggle" onClick={() => setShowConfirmPassword((value) => !value)} aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}>{showConfirmPassword ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}</button>
+          </label>
+
+          {confirmPassword.length > 0 && password !== confirmPassword && (
+            <div className="password-mismatch-hint" role="alert">{t('auth.passwordMismatch')}</div>
+          )}
+
+          {error && <div className="login-error" role="alert" aria-live="polite"><AlertTriangleIcon size={17} color="currentColor" /><span>{error}</span></div>}
+          {successMsg && <div className="register-success" role="status" aria-live="polite">{successMsg}</div>}
 
           <button className="login-submit" type="submit" disabled={loading}><span>{loading ? '…' : t('auth.registerAction')}</span><BackIcon size={17} /></button>
         </form>
 
         <div className="login-divider"><span>{t('auth.socialDivider')}</span></div>
-        <div className="login-social" aria-label="Social registration options"><button type="button" className="login-social-button" aria-label="Continue with Google"><GoogleIcon /></button><button type="button" className="login-social-button" aria-label="Continue with Apple"><AppleIcon /></button></div>
+        <div className="login-social" aria-label="Social registration options"><button type="button" className="login-social-button" aria-label={t('auth.socialGoogle')} title={t('auth.socialGoogle')}><GoogleIcon /></button><button type="button" className="login-social-button" aria-label={t('auth.socialApple')} title={t('auth.socialApple')}><AppleIcon /></button></div>
 
         <p className="register-footer">{t('auth.alreadyAccount')} <button type="button" onClick={() => onNavigate('login')}>{t('auth.login')}</button></p>
       </div>

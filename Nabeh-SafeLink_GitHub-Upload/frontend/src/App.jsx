@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -21,21 +21,25 @@ import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import VerifyOtp from './pages/auth/VerifyOtp';
 import WelcomePage from './pages/WelcomePage';
-
-import Home from './pages/Home';
-import Scanner from './pages/Scanner';
-import History from './pages/History';
-import Statistics from './pages/Statistics';
-import About from './pages/About';
-import Contact from './pages/Contact';
-import Faq from './pages/Faq';
-import UserGuide from './pages/UserGuide';
+import SessionCheckScreen from './components/SessionCheckScreen';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Scanner = lazy(() => import('./pages/Scanner'));
+const History = lazy(() => import('./pages/History'));
+const Statistics = lazy(() => import('./pages/Statistics'));
+const ScanDetails = lazy(() => import('./pages/ScanDetails'));
+const Comparison = lazy(() => import('./pages/Comparison'));
+const ExportReport = lazy(() => import('./pages/ExportReport'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const AlertSettings = lazy(() => import('./pages/AlertSettings'));
+const About = lazy(() => import('./pages/About'));
+const Contact = lazy(() => import('./pages/Contact'));
+const Faq = lazy(() => import('./pages/Faq'));
+const UserGuide = lazy(() => import('./pages/UserGuide'));
 import ErrorPage from './components/ErrorPage';
 import BottomNav from './components/BottomNav';
 import './styles/theme.css';
-
 const TAB_PATHS = {
-  home: '/home',
+  home: '/dashboard',
   scan: '/scan',
   history: '/history',
   stats: '/stats',
@@ -46,6 +50,7 @@ const TAB_PATHS = {
 };
 
 function getActiveTab(pathname) {
+  if (pathname === '/home') return 'home';
   const match = Object.entries(TAB_PATHS)
     .filter(([, path]) => path !== '/')
     .find(([, path]) => pathname === path || pathname.startsWith(`${path}/`));
@@ -53,16 +58,7 @@ function getActiveTab(pathname) {
 }
 
 function LoadingRoute() {
-  return (
-    <main role="status" aria-live="polite" aria-busy="true" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--color-bg-subtle)' }}>
-      <span>جارٍ التحقق من الجلسة… / Checking session…</span>
-    </main>
-  );
-}
-
-function safeNextPath(value) {
-  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '/';
-  return value;
+  return <SessionCheckScreen />;
 }
 
 function ProtectedRoute() {
@@ -114,12 +110,15 @@ function NavigationLayout({ initialScanUrl, onQuickScan, onClearInitial, onNavig
 
 function RoutedPage({ component: Component, ...props }) {
   const context = useOutletContext();
-  return <Component {...context} {...props} />;
+  return (
+    <Suspense fallback={<LoadingRoute />}>
+      <Component {...context} {...props} />
+    </Suspense>
+  );
 }
 
 function AuthNavigation() {
   const navigate = useNavigate();
-  const location = useLocation();
 
   return (page, data = {}) => {
     const paths = {
@@ -128,7 +127,7 @@ function AuthNavigation() {
       'forgot-password': '/forgot-password',
       'reset-password': '/reset-password',
       'verify-otp': '/verify-otp',
-      home: '/home',
+      home: '/dashboard',
       scan: '/scan',
     };
     const path = paths[page];
@@ -141,10 +140,8 @@ function AuthNavigation() {
     }
 
     if (page === 'home') {
-      const queryNext = new URLSearchParams(location.search).get('next');
-      const from = location.state?.from;
-      const stateNext = from ? `${from.pathname}${from.search || ''}` : '/home';
-      navigate(safeNextPath(queryNext || stateNext), { replace: true });
+      // Authentication always lands in the official workspace, never the public welcome screen.
+      navigate('/dashboard', { replace: true });
       return;
     }
 
@@ -159,11 +156,21 @@ function OnboardingRoute() {
 
 function SplashRoute() {
   const navigate = useNavigate();
-  return <Splash onComplete={() => navigate('/welcome', { replace: true })} />;
+  const { isGuest, user } = useAuth();
+
+  const handleComplete = () => {
+    if (!isGuest && user) {
+      navigate('/dashboard', { replace: true });
+    } else {
+      navigate('/welcome', { replace: true });
+    }
+  };
+
+  return <Splash onComplete={handleComplete} />;
 }
 
 function SettingsRedirect() {
-  return <Navigate to="/home" replace />;
+  return <Navigate to="/dashboard" replace />;
 }
 
 function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
@@ -171,12 +178,17 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
   const location = useLocation();
   const onNavigateAuth = AuthNavigation();
   const query = new URLSearchParams(location.search);
+  const { isSecuringSession, finishSecuringSession } = useAuth();
 
   const navigateFromPage = (tab) => navigate(TAB_PATHS[tab] || '/');
   const rescan = (value) => {
     onQuickScan(value || '');
     navigate('/scan');
   };
+
+  if (isSecuringSession) {
+    return <SessionCheckScreen onComplete={finishSecuringSession} />;
+  }
 
   return (
     <Routes>
@@ -192,7 +204,6 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
           <Route path="/contact" element={<RoutedPage component={Contact} />} />
           <Route path="/about" element={<RoutedPage component={About} />} />
         </Route>
-        <Route path="/reset-password" element={<ResetPassword onNavigate={onNavigateAuth} />} />
         <Route path="/welcome" element={<WelcomePage />} />
         <Route path="/onboarding" element={<OnboardingRoute />} />
         <Route path="/splash" element={<SplashRoute />} />
@@ -202,14 +213,22 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
         <Route path="/login" element={<Login onNavigate={onNavigateAuth} />} />
         <Route path="/register" element={<Register onNavigate={onNavigateAuth} />} />
         <Route path="/forgot-password" element={<ForgotPassword onNavigate={onNavigateAuth} />} />
+        <Route path="/reset-password" element={<ResetPassword onNavigate={onNavigateAuth} />} />
         <Route path="/verify-otp" element={<VerifyOtp onNavigate={onNavigateAuth} email={query.get('email') || ''} type={query.get('type') || 'signup'} />} />
       </Route>
 
       <Route element={<ProtectedRoute />}>
         <Route element={<NavigationLayout initialScanUrl={initialScanUrl} onQuickScan={onQuickScan} onClearInitial={onClearInitial} onNavigateAuth={onNavigateAuth} />}>
-          <Route path="/home" element={<RoutedPage component={Home} onNavigate={navigateFromPage} onQuickScan={rescan} />} />
+          <Route path="/dashboard" element={<RoutedPage component={Dashboard} />} />
+          <Route path="/notifications" element={<RoutedPage component={Notifications} />} />
+          <Route path="/settings/alerts" element={<RoutedPage component={AlertSettings} />} />
+          {/* /home remains a backwards-compatible alias; Dashboard is the single workspace. */}
+          <Route path="/home" element={<RoutedPage component={Dashboard} />} />
           <Route path="/history" element={<RoutedPage component={History} onQuickScan={rescan} />} />
           <Route path="/stats" element={<RoutedPage component={Statistics} />} />
+          <Route path="/scan-details/:scanId" element={<RoutedPage component={ScanDetails} />} />
+          <Route path="/compare" element={<RoutedPage component={Comparison} />} />
+          <Route path="/export-report" element={<RoutedPage component={ExportReport} />} />
           <Route path="/settings" element={<SettingsRedirect />} />
         </Route>
       </Route>

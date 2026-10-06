@@ -43,6 +43,16 @@ export const getScans = async () => {
   return response.data;
 };
 
+export const getScanDetails = async (scanId) => {
+  const response = await api.get(`/scans/${encodeURIComponent(scanId)}`);
+  return response.data;
+};
+
+export const compareScans = async (scanIds) => {
+  const response = await api.get(`/scans/compare?ids=${scanIds.map(encodeURIComponent).join(',')}`);
+  return response.data;
+};
+
 export const getStatistics = async () => {
   const response = await api.get('/statistics/me');
   return response.data;

@@ -134,9 +134,21 @@ export default function Statistics({ activeTab, setActiveTab, isGuest = true, on
             <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--color-primary)', marginBottom: 'var(--space-2)' }}>
               {t('stats.fraudTypesTitle')}
             </h3>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-              لا تتوفر إحصاءات موثقة حسب نوع الاحتيال في البيانات الحالية.
-            </p>
+            {stats?.fraud_types && stats.fraud_types.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
+                {stats.fraud_types.map((ft) => (
+                  <div key={ft.code} style={{ background: 'var(--color-bg-subtle)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'block' }}>{ft.code}</span>
+                    <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--color-primary)', display: 'block', margin: '4px 0' }}>{ft.name_ar}</strong>
+                    <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-danger)' }}>{ft.count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
+                لا توجد أنواع احتيال مرصودة في الفحوصات الحالية.
+              </p>
+            )}
           </div>
         </div>
       </main>

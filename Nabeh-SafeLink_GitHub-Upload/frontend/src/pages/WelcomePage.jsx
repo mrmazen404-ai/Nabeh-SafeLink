@@ -1,18 +1,15 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { useTheme } from '../context/ThemeContext';
+import Header from '../components/Header';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
   CheckCircleIcon,
   CpuIcon,
-  GlobeIcon,
   LinkIcon,
-  MoonIcon,
   SearchIcon,
   ShieldCheckIcon,
-  SunIcon,
 } from '../components/Icons';
 import './welcome-page.css';
 
@@ -85,31 +82,28 @@ const content = {
 export default function WelcomePage() {
   const navigate = useNavigate();
   const { isGuest } = useAuth();
-  const { lang, toggleLanguage, dir } = useLanguage();
-  const { theme, toggleTheme } = useTheme();
+  const { lang, dir } = useLanguage();
   const text = content[lang] || content.ar;
   const ForwardIcon = dir === 'rtl' ? ArrowLeftIcon : ArrowRightIcon;
+  const setActiveTab = (tab) => {
+    const paths = {
+      scan: '/scan',
+      about: '/about',
+      guide: '/guide',
+      faq: '/faq',
+      home: '/home',
+      history: '/history',
+      stats: '/stats',
+    };
+    navigate(paths[tab] || '/welcome');
+  };
 
   return (
     <main className="welcome-page" dir={dir}>
       <div className="welcome-glow welcome-glow-one" aria-hidden="true" />
       <div className="welcome-glow welcome-glow-two" aria-hidden="true" />
 
-      <header className="welcome-header">
-        <button type="button" className="welcome-brand" onClick={() => navigate('/welcome')} aria-label="Nabeh SafeLink">
-          <span className="welcome-brand-icon"><ShieldCheckIcon size={24} color="#FFFFFF" /></span>
-          <span className="welcome-brand-copy"><strong>Nabeh</strong><b>SafeLink</b></span>
-        </button>
-        <div className="welcome-controls">
-          <button type="button" className="welcome-control" onClick={toggleLanguage} aria-label="Change language" title={text.language}>
-            <GlobeIcon size={17} color="currentColor" /><span>{text.language}</span>
-          </button>
-          <button type="button" className="welcome-control welcome-theme-control" onClick={toggleTheme} aria-label={text.theme} title={text.theme}>
-            {theme === 'dark' ? <SunIcon size={17} color="currentColor" /> : <MoonIcon size={17} color="currentColor" />}
-          </button>
-          {!isGuest && <span className="welcome-session-badge"><CheckCircleIcon size={15} color="currentColor" /> {text.welcome}</span>}
-        </div>
-      </header>
+      <Header activeTab="scan" setActiveTab={setActiveTab} onNavigateAuth={(page) => navigate(`/${page}`)} />
 
       <section className="welcome-hero">
         <div className="welcome-hero-copy">

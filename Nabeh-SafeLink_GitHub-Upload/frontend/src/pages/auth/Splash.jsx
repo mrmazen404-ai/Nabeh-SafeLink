@@ -1,49 +1,164 @@
-import { useEffect, useState } from 'react';
-import { LinkIcon } from '../../components/Icons';
+import { useEffect, useState, useRef } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
+import { getAccessToken } from '../../services/authToken';
 import AuthPageControls from '../../components/AuthPageControls';
 import '../../styles/splash.css';
 import './login.css';
 
+async function checkBackendHealth() {
+  try {
+    await api.get('/health', { timeout: 2000 });
+    return true;
+  } catch {
+    // If backend health endpoint fails or times out, proceed gracefully
+    return false;
+  }
+}
+
 export default function Splash({ onComplete }) {
+  const [stage, setStage] = useState('preparing'); // 'preparing' | 'checking' | 'ready'
   const [isExiting, setIsExiting] = useState(false);
   const { t, dir } = useLanguage();
+  const auth = useAuth();
+  const onCompleteRef = useRef(onComplete);
 
   useEffect(() => {
-    // Reserve the final 460ms for a deliberate fade-out before the route changes.
-    const exitTimer = setTimeout(() => setIsExiting(true), 2740);
-    const completeTimer = setTimeout(() => {
-      if (onComplete) onComplete();
-    }, 3200);
-    return () => {
-      clearTimeout(exitTimer);
-      clearTimeout(completeTimer);
-    };
+    onCompleteRef.current = onComplete;
   }, [onComplete]);
 
+  useEffect(() => {
+    let isMounted = true;
+    let fallbackTimer;
+
+    // 1. Minimum preparation delay for smooth visual transition
+    const prepareTimer = setTimeout(() => {
+      if (isMounted) setStage('checking');
+    }, 600);
+
+    // 2. Hard Fail-safe timeout: Ensure splash transitions to 'ready' within 2200ms max
+    fallbackTimer = setTimeout(() => {
+      if (isMounted) {
+        setStage('ready');
+      }
+    }, 2200);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(prepareTimer);
+      clearTimeout(fallbackTimer);
+    };
+  }, []);
+
+  // Parallel Background Bootstrap Execution during 'checking' stage
+  useEffect(() => {
+    if (stage !== 'checking') return;
+
+    let isMounted = true;
+
+    async function runParallelBootstrap() {
+      const candidateToken = getAccessToken();
+
+      // Parallel Task 1: Backend Health Check
+      const healthPromise = checkBackendHealth();
+
+      // Parallel Task 2: Auth Verification Check (if token exists and auth is still checking)
+      const authPromise = candidateToken && auth?.checkAuth ? auth.checkAuth(candidateToken).catch(() => null) : Promise.resolve();
+
+      // Run both parallel tasks
+      await Promise.allSettled([healthPromise, authPromise]);
+
+      if (isMounted) {
+        setStage('ready');
+      }
+    }
+
+    runParallelBootstrap();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [stage, auth]);
+
+  // Transition to 'ready' and trigger exit animation & onComplete callback
+  useEffect(() => {
+    if (stage !== 'ready') return;
+
+    let timerExit;
+    let timerComplete;
+    let isMounted = true;
+
+    // Start fade-out animation
+    timerExit = setTimeout(() => {
+      if (isMounted) setIsExiting(true);
+    }, 250);
+
+    // Invoke onComplete callback to transition navigation
+    timerComplete = setTimeout(() => {
+      if (isMounted && onCompleteRef.current) {
+        onCompleteRef.current();
+      }
+    }, 600);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timerExit);
+      clearTimeout(timerComplete);
+    };
+  }, [stage]);
+
+  const getStatusText = () => {
+    switch (stage) {
+      case 'ready':
+        return t('splash.statusReady');
+      case 'checking':
+        return t('splash.statusChecking');
+      case 'preparing':
+      default:
+        return t('splash.statusPreparing');
+    }
+  };
+
   return (
-    <main className={`splash-page${isExiting ? ' is-exiting' : ''}`} aria-label="Nabeh SafeLink" dir={dir}>
+    <main
+      className={`splash-page${isExiting ? ' is-exiting' : ''}`}
+      aria-label="Nabeh SafeLink"
+      dir={dir}
+    >
       <AuthPageControls />
       <div className="splash-background" aria-hidden="true" />
 
-      <section className="splash-content" aria-live="polite">
+      <section className="splash-content" role="status" aria-live="polite">
         <div className="splash-brand-mark" aria-hidden="true">
           <svg className="splash-shield" viewBox="0 0 180 204" role="img">
             <defs>
               <linearGradient id="splashShieldGradient" x1="0" y1="0" x2="0.8" y2="1">
-                <stop offset="0%" stopColor="#8CB9FF" />
-                <stop offset="42%" stopColor="#3D82FF" />
-                <stop offset="100%" stopColor="#1A2B5E" />
+                <stop offset="0%" stopColor="var(--splash-shield-top, #8CB9FF)" />
+                <stop offset="42%" stopColor="var(--splash-shield-mid, #3D82FF)" />
+                <stop offset="100%" stopColor="var(--splash-shield-base, #1A2B5E)" />
               </linearGradient>
               <linearGradient id="splashShieldEdge" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.8" />
-                <stop offset="100%" stopColor="#B7D4FF" stopOpacity="0.15" />
+                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.85" />
+                <stop offset="100%" stopColor="#B7D4FF" stopOpacity="0.2" />
               </linearGradient>
               <filter id="splashShieldShadow" x="-35%" y="-25%" width="170%" height="170%">
-                <feDropShadow dx="0" dy="12" stdDeviation="10" floodColor="#1A2B5E" floodOpacity="0.2" />
+                <feDropShadow dx="0" dy="12" stdDeviation="10" floodColor="#1A2B5E" floodOpacity="0.25" />
               </filter>
             </defs>
+
+            {/* Outer Glow Halo Ring */}
             <path
+              className="splash-shield-halo"
+              d="M90 3 169 31v58c0 52-31 91-79 114C42 180 11 141 11 89V31L90 3Z"
+              fill="none"
+              stroke="var(--splash-halo-stroke, rgba(61, 130, 255, 0.35))"
+              strokeWidth="2"
+            />
+
+            {/* Main Shield Body */}
+            <path
+              className="splash-shield-body"
               d="M90 7 165 34v55c0 49-29 86-75 108C44 175 15 138 15 89V34L90 7Z"
               fill="url(#splashShieldGradient)"
               stroke="url(#splashShieldEdge)"
@@ -51,16 +166,29 @@ export default function Splash({ onComplete }) {
               strokeLinejoin="round"
               filter="url(#splashShieldShadow)"
             />
+
+            {/* Inset Accent Border */}
             <path
               d="M90 27 144 47v42c0 35-18 63-54 82-36-19-54-47-54-82V47l54-20Z"
               fill="none"
               stroke="#FFFFFF"
-              strokeOpacity="0.22"
-              strokeWidth="3"
+              strokeOpacity="0.25"
+              strokeWidth="2.5"
             />
-            <foreignObject x="48" y="62" width="84" height="84">
-              <div className="splash-link-icon"><LinkIcon size={56} color="#FFFFFF" /></div>
-            </foreignObject>
+
+            {/* Pure Vector Link Icon */}
+            <g
+              transform="translate(63, 75) scale(2.25)"
+              fill="none"
+              stroke="#FFFFFF"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="splash-shield-icon"
+            >
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </g>
           </svg>
         </div>
 
@@ -73,8 +201,12 @@ export default function Splash({ onComplete }) {
         </div>
 
         <div className="splash-status-block">
-          <span className="splash-status-title">{t('splash.status')}</span>
-          <span className="splash-status-dots" aria-hidden="true"><i /><i /><i /></span>
+          <span className="splash-status-title">{getStatusText()}</span>
+          <span className="splash-status-dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
         </div>
       </section>
 

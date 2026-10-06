@@ -113,7 +113,7 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
   };
 
   if (loading) {
-    return <LoadingScreen url={url} />;
+    return <LoadingScreen url={url} scanType={scanType} />;
   }
 
   if (result) {
@@ -140,6 +140,8 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
             <InfoIcon size={18} color="#16A34A" />
             <span>
               <strong>{t('scanner.guestTitle')}</strong> {t('scanner.guestDesc')}
+              <br />
+              <small>{t('scanner.guestPrivacy')}</small>
             </span>
           </div>
         )}

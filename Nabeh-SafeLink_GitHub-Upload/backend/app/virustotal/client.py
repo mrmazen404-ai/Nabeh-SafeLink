@@ -6,12 +6,17 @@ Uses httpx.AsyncClient to prevent blocking the FastAPI event loop.
 import os
 import base64
 import asyncio
+import logging
+import time
 import httpx
 from typing import Dict, Any
+
+from app.observability import elapsed_ms, log_event, resource_id, safe_error
 
 
 VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "")
 VIRUSTOTAL_BASE_URL = "https://www.virustotal.com/api/v3"
+logger = logging.getLogger(__name__)
 
 
 def _get_headers() -> Dict[str, str]:
@@ -29,7 +34,11 @@ def _url_id(url: str) -> str:
 
 async def check_url_virustotal(url: str) -> Dict[str, Any]:
     """Check a URL against VirusTotal asynchronously using httpx."""
+    started = time.perf_counter()
+    target_id = resource_id(url)
+    log_event(logger, logging.INFO, "virustotal_check_started", target_id=target_id)
     if not VIRUSTOTAL_API_KEY:
+        log_event(logger, logging.WARNING, "virustotal_not_configured", target_id=target_id)
         return {
             "status": "UNKNOWN",
             "confidence": 0.0,
@@ -42,6 +51,7 @@ async def check_url_virustotal(url: str) -> Dict[str, Any]:
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             response = await client.get(endpoint, headers=_get_headers())
+            log_event(logger, logging.DEBUG, "virustotal_lookup_response", target_id=target_id, status=response.status_code)
 
             if response.status_code == 404:
                 return await _submit_url(url, client)
@@ -68,18 +78,25 @@ async def check_url_virustotal(url: str) -> Dict[str, Any]:
                 }
 
             data = response.json()
-            return _parse_response(data)
+            result = _parse_response(data)
+            log_event(logger, logging.INFO, "virustotal_check_succeeded", target_id=target_id, status=result.get("status"), duration_ms=elapsed_ms(started))
+            return result
 
         except httpx.TimeoutException:
+            log_event(logger, logging.ERROR, "virustotal_timeout", target_id=target_id, duration_ms=elapsed_ms(started))
             return {"status": "UNKNOWN", "confidence": 0.0, "error": "Timeout"}
         except httpx.RequestError as e:
+            log_event(logger, logging.ERROR, "virustotal_connection_failed", target_id=target_id, error_type=safe_error(e), duration_ms=elapsed_ms(started))
             return {"status": "UNKNOWN", "confidence": 0.0, "error": str(e)}
         except Exception as e:
+            log_event(logger, logging.ERROR, "virustotal_check_failed", target_id=target_id, error_type=safe_error(e), duration_ms=elapsed_ms(started))
             return {"status": "UNKNOWN", "confidence": 0.0, "error": f"Unexpected: {e}"}
 
 
 async def _submit_url(url: str, client: httpx.AsyncClient) -> Dict[str, Any]:
     """Submit a new URL to VirusTotal asynchronously."""
+    target_id = resource_id(url)
+    log_event(logger, logging.INFO, "virustotal_submit_started", target_id=target_id)
     endpoint = f"{VIRUSTOTAL_BASE_URL}/urls"
 
     try:
@@ -90,6 +107,7 @@ async def _submit_url(url: str, client: httpx.AsyncClient) -> Dict[str, Any]:
         )
 
         if response.status_code not in (200, 201):
+            log_event(logger, logging.ERROR, "virustotal_submit_failed", target_id=target_id, status=response.status_code)
             return {
                 "status": "UNKNOWN",
                 "confidence": 0.0,
@@ -102,7 +120,10 @@ async def _submit_url(url: str, client: httpx.AsyncClient) -> Dict[str, Any]:
         get_endpoint = f"{VIRUSTOTAL_BASE_URL}/urls/{url_id}"
         get_response = await client.get(get_endpoint, headers=_get_headers())
         if get_response.status_code == 200:
-            return _parse_response(get_response.json())
+            result = _parse_response(get_response.json())
+            log_event(logger, logging.INFO, "virustotal_submit_succeeded", target_id=target_id, status=result.get("status"))
+            return result
+        log_event(logger, logging.WARNING, "virustotal_analysis_pending", target_id=target_id, status=get_response.status_code)
         return {
             "status": "UNKNOWN",
             "confidence": 0.0,
@@ -110,6 +131,7 @@ async def _submit_url(url: str, client: httpx.AsyncClient) -> Dict[str, Any]:
         }
 
     except Exception as e:
+        log_event(logger, logging.ERROR, "virustotal_submit_connection_failed", target_id=target_id, error_type=safe_error(e))
         return {"status": "UNKNOWN", "confidence": 0.0, "error": str(e)}
 
 

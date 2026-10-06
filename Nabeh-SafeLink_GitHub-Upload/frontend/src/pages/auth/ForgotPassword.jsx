@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Logo from '../../components/Logo';
 import { useAuth } from '../../context/AuthContext';
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from '../../components/Icons';
@@ -18,6 +18,13 @@ export default function ForgotPassword({ onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState('');
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -28,10 +35,12 @@ export default function ForgotPassword({ onNavigate }) {
       const response = await forgotPassword(email.trim());
       setMessage(response.message || t('auth.checkInbox'));
       setSubmitted(true);
+      timerRef.current = setTimeout(() => onNavigate('verify-otp', { email: email.trim(), type: 'recovery' }), 1800);
     } catch {
       // Keep the same privacy-preserving response for existing and unknown emails.
       setMessage(t('auth.checkInbox'));
       setSubmitted(true);
+      timerRef.current = setTimeout(() => onNavigate('verify-otp', { email: email.trim(), type: 'recovery' }), 1800);
     } finally {
       setLoading(false);
     }
@@ -61,7 +70,7 @@ export default function ForgotPassword({ onNavigate }) {
           <form className="login-form" onSubmit={handleSubmit} noValidate>
             <label className="login-field">
               <span className="login-field-icon"><MailIcon size={19} color="currentColor" /></span>
-              <input type="email" autoComplete="email" placeholder={t('auth.emailAddress')} value={email} onChange={(event) => setEmail(event.target.value)} aria-label={t('auth.emailAddress')} required />
+              <input type="email" dir={dir} autoComplete="email" placeholder={t('auth.emailAddress')} value={email} onChange={(event) => setEmail(event.target.value)} aria-label={t('auth.emailAddress')} required />
             </label>
             <button className="login-submit" type="submit" disabled={loading || !email.trim()}><span>{loading ? '…' : t('auth.sendReset')}</span><BackIcon size={17} /></button>
           </form>

@@ -10,12 +10,13 @@ import './verify-otp.css';
 const OTP_LENGTH = 6;
 
 export default function VerifyOtp({ onNavigate, email = '', type = 'signup' }) {
-  const { verifyOtp } = useAuth();
+  const { verifyOtp, resendOtp } = useAuth();
   const { t, dir } = useLanguage();
   const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(60);
+  const [resending, setResending] = useState(false);
   const inputsRef = useRef([]);
 
   useEffect(() => {
@@ -74,9 +75,25 @@ export default function VerifyOtp({ onNavigate, email = '', type = 'signup' }) {
     }
   };
 
+  const handleResend = async () => {
+    if (cooldown > 0 || resending || !email.trim()) return;
+    setError('');
+    setResending(true);
+    try {
+      await resendOtp(email.trim(), type);
+      setOtp(Array(OTP_LENGTH).fill(''));
+      setCooldown(60);
+    } catch (requestError) {
+      setError(requestError?.response?.status === 429 ? t('auth.resendRateLimited') : t('auth.resendError'));
+    } finally {
+      setResending(false);
+    }
+  };
+
   const BackIcon = dir === 'rtl' ? ArrowRightIcon : ArrowLeftIcon;
   const isRecovery = type === 'recovery';
-  const maskedEmail = email ? email.replace(/(^.).*(@.*$)/, '$1•••$2') : 'your registered email';
+  const fallbackEmailLabel = t('auth.registeredEmailFallback');
+  const maskedEmail = email ? email.replace(/(^.).*(@.*$)/, '$1•••$2') : fallbackEmailLabel;
 
   return (
     <main className="login-page verify-page" dir={dir}>
@@ -90,15 +107,31 @@ export default function VerifyOtp({ onNavigate, email = '', type = 'signup' }) {
 
         <form className="login-form" onSubmit={handleSubmit}>
           <div className="otp-inputs" role="group" aria-label="6-digit verification code" onPaste={handlePaste}>
-            {otp.map((digit, index) => <input key={index} ref={(element) => { inputsRef.current[index] = element; }} className="otp-input" type="text" inputMode="numeric" autoComplete={index === 0 ? 'one-time-code' : 'off'} maxLength={1} value={digit} onChange={(event) => updateDigit(index, event.target.value)} onKeyDown={(event) => handleKeyDown(index, event)} aria-label={`Digit ${index + 1}`} />)}
+            {otp.map((digit, index) => (
+              <div className="otp-input-box" key={index}>
+                <input
+                  ref={(element) => { inputsRef.current[index] = element; }}
+                  className="otp-input"
+                  type="text"
+                  dir="ltr"
+                  inputMode="numeric"
+                  autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                  maxLength={1}
+                  value={digit}
+                  onChange={(event) => updateDigit(index, event.target.value)}
+                  onKeyDown={(event) => handleKeyDown(index, event)}
+                  aria-label={`Digit ${index + 1}`}
+                />
+              </div>
+            ))}
           </div>
 
-          {error && <div className="login-error" role="alert"><AlertTriangleIcon size={17} color="currentColor" /><span>{error}</span></div>}
+          {error && <div className="login-error" role="alert" aria-live="polite"><AlertTriangleIcon size={17} color="currentColor" /><span>{error}</span></div>}
           <button className="login-submit" type="submit" disabled={loading || otp.join('').length !== OTP_LENGTH}><span>{loading ? '…' : t('auth.verifyCode')}</span><BackIcon size={17} /></button>
         </form>
 
         <div className="verify-resend">
-          {cooldown > 0 ? <span>{t('auth.requestCodeIn', { seconds: cooldown })}</span> : <button type="button" onClick={() => onNavigate('forgot-password')}>{t('auth.requestNewCode')}</button>}
+          {cooldown > 0 ? <span>{t('auth.requestCodeIn', { seconds: cooldown })}</span> : <button type="button" onClick={handleResend} disabled={resending}>{resending ? '…' : t('auth.requestNewCode')}</button>}
         </div>
         <button type="button" className="forgot-back-button" onClick={() => onNavigate(isRecovery ? 'forgot-password' : 'register')}><BackIcon size={16} /> {isRecovery ? t('auth.backToRecovery') : t('auth.backToRegister')}</button>
       </div>

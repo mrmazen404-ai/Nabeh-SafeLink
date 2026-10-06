@@ -16,4 +16,8 @@ frontend/node_modules/
 # Logs and local reports
 *.log
 
+# IDE settings
+.idea/
+.vscode/
+
 # Keep the production model explicitly tracked; do not add blanket *.joblib rules.

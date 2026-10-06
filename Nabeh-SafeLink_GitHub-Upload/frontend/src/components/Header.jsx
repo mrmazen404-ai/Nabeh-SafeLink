@@ -1,6 +1,6 @@
 import Logo from './Logo';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheckIcon, ShieldIcon, BarChartIcon, InfoIcon } from './Icons';
+import { ShieldCheckIcon, ShieldIcon, BarChartIcon, InfoIcon, UserIcon } from './Icons';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -63,6 +63,16 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
           <button type="button" className="header-preference-btn header-theme-btn" onClick={toggleTheme} aria-label={t('auth.toggleTheme')} title={t('auth.toggleTheme')}>{theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}</button>
           {!isGuest && user ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                className="header-preference-btn header-profile-btn"
+                onClick={() => navigate('/dashboard?section=profile')}
+                aria-label={t('nav.profileAria')}
+                title={t('nav.profile')}
+              >
+                <UserIcon size={16} />
+                <span>{t('nav.profile')}</span>
+              </button>
               <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-primary)' }}>
                 {user.display_name || user.email}
               </span>

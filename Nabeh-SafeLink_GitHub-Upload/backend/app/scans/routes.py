@@ -1,10 +1,12 @@
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from app.auth.security import AuthSecurityError, get_authenticated_user
+from app.security.guest_rate_limit import enforce_guest_rate_limit
 from app.scans.service import ScanPersistenceError, ScanService
+from app.db.supabase_client import supabase
 
 router = APIRouter()
 
@@ -50,7 +52,11 @@ def _validate_input(request: ScanRequest) -> str:
 
 
 @router.post("/guest")
-async def create_guest_scan(request: ScanRequest, response: Response):
+async def create_guest_scan(
+    request: ScanRequest,
+    response: Response,
+    _: None = Depends(enforce_guest_rate_limit),
+):
     """Run ML, VirusTotal, and Gemini for the guest without persistence."""
     raw_input = _validate_input(request)
     response.headers["Cache-Control"] = "no-store, private"
@@ -99,3 +105,53 @@ async def get_scans(
     except Exception:
         raise HTTPException(status_code=503, detail="تعذر تحميل سجل الفحوصات") from None
     return {"success": True, "data": scans}
+
+
+@router.get("/compare")
+async def compare_scans(
+    response: Response,
+    ids: str = Query(..., description="Comma-separated scan IDs, maximum 4"),
+    authorization: Optional[str] = Header(None),
+):
+    user_id = await get_required_user_id(authorization)
+    scan_ids = [item.strip() for item in ids.split(",") if item.strip()]
+    if len(scan_ids) < 2 or len(scan_ids) > 4:
+        raise HTTPException(status_code=422, detail="اختر فحصين إلى أربعة فحوصات للمقارنة")
+    try:
+        result = supabase.table("scans").select(
+            "id,input_type,input_value_masked,status,classification,confidence_score,confidence_level,recommendation,created_at,completed_at"
+        ).eq("user_id", user_id).in_("id", scan_ids).order("created_at", desc=False).execute()
+    except Exception:
+        raise HTTPException(status_code=503, detail="تعذر تحميل بيانات المقارنة") from None
+    if len(result.data or []) < 2:
+        raise HTTPException(status_code=404, detail="لم يتم العثور على فحوصات كافية تخص حسابك")
+    return {"success": True, "data": result.data}
+
+
+@router.get("/{scan_id}")
+async def get_scan_details(
+    scan_id: str,
+    response: Response,
+    authorization: Optional[str] = Header(None),
+):
+    user_id = await get_required_user_id(authorization)
+    response.headers["Cache-Control"] = "no-store, private"
+    try:
+        try:
+            result = supabase.table("scans").select(
+                "id,user_id,input_type,input_value_masked,status,classification,confidence_score,confidence_level,recommendation,analysis_snapshot,created_at,completed_at"
+            ).eq("id", scan_id).eq("user_id", user_id).limit(1).execute()
+        except Exception:
+            result = supabase.table("scans").select(
+                "id,user_id,input_type,input_value_masked,status,classification,confidence_score,confidence_level,recommendation,created_at,completed_at"
+            ).eq("id", scan_id).eq("user_id", user_id).limit(1).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="الفحص غير موجود أو لا تملك صلاحية الوصول إليه")
+        explanation = supabase.table("scan_explanations").select(
+            "id,language,summary,reasons,recommendation,provider,created_at"
+        ).eq("scan_id", scan_id).order("created_at", desc=True).limit(1).execute()
+        return {"success": True, "data": {"scan": result.data[0], "explanation": (explanation.data or [None])[0]}}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="تعذر تحميل تفاصيل الفحص") from None

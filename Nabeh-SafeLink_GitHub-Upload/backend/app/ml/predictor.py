@@ -31,9 +31,20 @@ SUSPICIOUS_EXTENSIONS = (
     ".bat", ".cmd", ".js", ".jar", ".apk",
 )
 
-# Model artifacts use pickle under the hood. Do not deserialize one merely by
-# importing the API; an operator must explicitly trust the artifact first.
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model.joblib")
+TOP_SAFE_DOMAINS = {
+    "google.com", "youtube.com", "microsoft.com", "apple.com", "amazon.com",
+    "github.com", "wikipedia.org", "cloudflare.com", "linkedin.com", "twitter.com",
+    "x.com", "instagram.com", "facebook.com", "whatsapp.com", "telegram.org",
+    "openai.com", "gov.sa", "edu.sa", "nic.sa", "moe.gov.sa", "moi.gov.sa",
+    "salla.sa", "zid.sa", "stc.com.sa", "mobily.com.sa", "alrajhibank.com.sa",
+    "snb.com.sa", "pypi.org", "npmjs.com", "python.org", "vercel.app",
+}
+
+# Preferred model is retrained LightGBM model, falling back to original model
+RETRAINED_MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model_retrained.joblib")
+ORIGINAL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model.joblib")
+MODEL_PATH = RETRAINED_MODEL_PATH if os.path.exists(RETRAINED_MODEL_PATH) else ORIGINAL_MODEL_PATH
+
 model_bundle = None
 _model_load_attempted = False
 
@@ -210,6 +221,26 @@ def extract_features(raw_url: str) -> dict:
 
 
 def predict_url(url: str) -> dict:
+    url_norm, parsed, host, port = parse_url(url)
+    if not url_norm:
+        return {
+            "classification": "UNKNOWN",
+            "confidence": 0.5,
+            "source": "EMPTY_INPUT",
+        }
+
+    ext = _TLD_EXTRACTOR(host)
+    registered_domain = f"{ext.domain}.{ext.suffix}".lower() if ext.domain and ext.suffix else host.lower()
+
+    # Check verified safe whitelist
+    if registered_domain in TOP_SAFE_DOMAINS or host.lower() in TOP_SAFE_DOMAINS or host.endswith(".gov.sa") or host.endswith(".edu.sa"):
+        return {
+            "classification": "SAFE",
+            "confidence": 0.99,
+            "phishing_prob": 0.01,
+            "source": "VERIFIED_SAFE_DOMAIN",
+        }
+
     global model_bundle
     if model_bundle is None:
         _load_trusted_model()
@@ -229,10 +260,12 @@ def predict_url(url: str) -> dict:
         df = pd.DataFrame([features])[feature_names]
 
         probs = model.predict_proba(df)[0]
-        phishing_prob = float(probs[1]) if len(probs) > 1 else float(probs[0])
+        label_map = model_bundle.get("label_mapping", {"good": 0, "bad": 1})
+        bad_idx = label_map.get("bad", 1)
+        phishing_prob = float(probs[bad_idx]) if len(probs) > bad_idx else float(probs[-1])
 
         if phishing_prob >= threshold:
-            classification = "DANGEROUS"
+            classification = "DANGEROUS" if phishing_prob >= 0.50 else "SUSPICIOUS"
             confidence = phishing_prob
         elif phishing_prob >= (threshold * 0.6):
             classification = "SUSPICIOUS"

@@ -15,6 +15,11 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => getAccessToken());
   const [status, setStatus] = useState(() => (getAccessToken() ? 'checking' : 'guest'));
+  const [isSecuringSession, setIsSecuringSession] = useState(false);
+
+  const finishSecuringSession = useCallback(() => {
+    setIsSecuringSession(false);
+  }, []);
 
   const loading = status === 'checking' || status === 'logging_in' || status === 'logging_out';
   const isGuest = status === 'guest' || status === 'error' || !user || !token;
@@ -67,6 +72,7 @@ export function AuthProvider({ children }) {
       setAccessToken(accessToken);
       setToken(accessToken);
       await checkAuth(accessToken);
+      setIsSecuringSession(true);
       return res.data;
     } catch (error) {
       clearLocalSession(setUser, setToken, setStatus);
@@ -81,6 +87,11 @@ export function AuthProvider({ children }) {
 
   const forgotPassword = useCallback(async (email) => {
     const res = await api.post('/auth/forgot-password', { email });
+    return res.data;
+  }, []);
+
+  const resendOtp = useCallback(async (email, type = 'signup') => {
+    const res = await api.post('/auth/resend-otp', { email, type });
     return res.data;
   }, []);
 
@@ -102,6 +113,7 @@ export function AuthProvider({ children }) {
       setAccessToken(accessToken);
       setToken(accessToken);
       await checkAuth(accessToken);
+      setIsSecuringSession(true);
     } else if (res.data?.success && accessToken && type === 'recovery') {
       sessionStorage.setItem('nabeh_recovery_token', accessToken);
     }
@@ -127,14 +139,17 @@ export function AuthProvider({ children }) {
     status,
     loading,
     isGuest,
+    isSecuringSession,
     login,
     register,
     forgotPassword,
+    resendOtp,
     resetPassword,
     verifyOtp,
     logout,
     checkAuth,
-  }), [user, token, status, loading, isGuest, login, register, forgotPassword, resetPassword, verifyOtp, logout, checkAuth]);
+    finishSecuringSession,
+  }), [user, token, status, loading, isGuest, isSecuringSession, login, register, forgotPassword, resendOtp, resetPassword, verifyOtp, logout, checkAuth, finishSecuringSession]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

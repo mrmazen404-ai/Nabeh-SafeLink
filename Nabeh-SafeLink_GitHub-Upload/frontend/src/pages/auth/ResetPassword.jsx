@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Logo from '../../components/Logo';
 import { useAuth } from '../../context/AuthContext';
 import { AlertTriangleIcon, ArrowLeftIcon, ArrowRightIcon, CheckCircleIcon } from '../../components/Icons';
@@ -30,6 +30,13 @@ export default function ResetPassword({ onNavigate }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [recoveryToken, setRecoveryToken] = useState('');
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -41,7 +48,7 @@ export default function ResetPassword({ onNavigate }) {
     } else {
       setError(t('auth.resetInvalid'));
     }
-  }, [lang]);
+  }, [lang, t]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -65,7 +72,7 @@ export default function ResetPassword({ onNavigate }) {
       setRecoveryToken('');
       setSuccess(true);
       window.history.replaceState(null, '', window.location.pathname);
-      window.setTimeout(() => onNavigate('login'), 2500);
+      timerRef.current = setTimeout(() => onNavigate('login'), 2200);
     } catch {
       setError(t('auth.resetError'));
     } finally {
@@ -93,9 +100,9 @@ export default function ResetPassword({ onNavigate }) {
           </section>
         ) : (
           <form className="login-form" onSubmit={handleSubmit} noValidate>
-            <label className="login-field"><span className="login-field-icon"><LockIcon size={19} color="currentColor" /></span><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" maxLength={128} placeholder={t('auth.newPassword')} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} aria-label={t('auth.newPassword')} required /><button type="button" className="login-password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}>{showPassword ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}</button></label>
-            <label className="login-field"><span className="login-field-icon"><LockIcon size={19} color="currentColor" /></span><input type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" maxLength={128} placeholder={t('auth.confirmNewPassword')} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} aria-label={t('auth.confirmNewPassword')} required /><button type="button" className="login-password-toggle" onClick={() => setShowConfirmPassword((value) => !value)} aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}>{showConfirmPassword ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}</button></label>
-            {error && <div className="login-error" role="alert"><AlertTriangleIcon size={17} color="currentColor" /><span>{error}</span></div>}
+            <label className="login-field"><span className="login-field-icon"><LockIcon size={19} color="currentColor" /></span><input type={showPassword ? 'text' : 'password'} dir={dir} autoComplete="new-password" maxLength={128} placeholder={t('auth.newPassword')} value={newPassword} onChange={(event) => { setNewPassword(event.target.value); setError(''); }} aria-label={t('auth.newPassword')} required /><button type="button" className="login-password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}>{showPassword ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}</button></label>
+            <label className="login-field"><span className="login-field-icon"><LockIcon size={19} color="currentColor" /></span><input type={showConfirmPassword ? 'text' : 'password'} dir={dir} autoComplete="new-password" maxLength={128} placeholder={t('auth.confirmNewPassword')} value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError(''); }} aria-label={t('auth.confirmNewPassword')} required /><button type="button" className="login-password-toggle" onClick={() => setShowConfirmPassword((value) => !value)} aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}>{showConfirmPassword ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}</button></label>
+            {error && <div className="login-error" role="alert" aria-live="polite"><AlertTriangleIcon size={17} color="currentColor" /><span>{error}</span></div>}
             <button className="login-submit" type="submit" disabled={loading || !newPassword || !confirmPassword || !recoveryToken}><span>{loading ? '…' : t('auth.updatePassword')}</span><BackIcon size={17} /></button>
           </form>
         )}

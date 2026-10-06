@@ -92,22 +92,22 @@ def decode_token(token: str, required_purpose: str = "access") -> dict[str, Any]
 
 def get_user_by_id(user_id: str) -> Optional[dict[str, Any]]:
     result = supabase.table("custom_users").select(
-        "id,email,display_name,password_hash,email_verified,preferred_language"
+        "id,email,display_name,password_hash,email_verified,preferred_language,role,status,created_at,last_login_at"
     ).eq("id", user_id).limit(1).execute()
     return result.data[0] if result.data else None
 
 
 def get_user_by_email(email: str) -> Optional[dict[str, Any]]:
     result = supabase.table("custom_users").select(
-        "id,email,display_name,password_hash,email_verified,preferred_language"
-    ).eq("email", normalize_email(email)).limit(1).execute()
+        "id,email,display_name,password_hash,email_verified,preferred_language,role,status,created_at,last_login_at"
+    ).ilike("email", normalize_email(email)).limit(1).execute()
     return result.data[0] if result.data else None
 
 
 def get_authenticated_user(token: str) -> dict[str, Any]:
     claims = decode_token(token, "access")
     user = get_user_by_id(str(claims["sub"]))
-    if not user or not user.get("email_verified"):
+    if not user or not user.get("email_verified") or user.get("status", "ACTIVE") != "ACTIVE":
         raise AuthSecurityError("user is not authenticated")
     return user
 

@@ -3,17 +3,35 @@ import { ShieldCheckIcon } from './Icons';
 import { useLanguage } from '../context/LanguageContext';
 import '../styles/loading.css';
 
-export default function LoadingScreen({ url, onCancel }) {
-  const { t, dir } = useLanguage();
+export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
+  const { t, dir, lang } = useLanguage();
   const [messageIndex, setMessageIndex] = useState(0);
 
-  const messages = t('loading.messages') || [
-    'جاري تحليل الرابط والتحقق الهيكلي...',
-    'فحص قواعد البيانات العالمية للتهديدات...',
-    'التحقق عبر نموذجات التعلم الآلي والذكاء الاصطناعي...',
-    'تحليل مؤشرات الاحتيال والانتحال...',
-    'إعداد التقرير التفسيري الشامل...',
-  ];
+  const isText = scanType === 'TEXT' || (url && !url.startsWith('http') && url.includes(' '));
+
+  const messages = isText
+    ? (lang === 'ar'
+      ? [
+          'جاري فحص الرسالة النصية والتحقق من خلوها من الاحتيال...',
+          'وكيل الذكاء الاصطناعي يبحث في الإنترنت ويقارن بالمصادر الرسمية...',
+          'فحص الرابط المدمج ورصد أساليب الاستدراج البنكي...',
+          'تقسيم الرسالة وتحديد مدى المصداقية والأمان...',
+          'إعداد التقرير التفسيري للرسالة النصية...'
+        ]
+      : [
+          'Analyzing text message for smishing & fraud...',
+          'AI Agent searching online & comparing with official sources...',
+          'Auditing embedded link & detecting banking lure tactics...',
+          'Segmenting message & verifying authenticity...',
+          'Generating comprehensive SMS security report...'
+        ])
+    : (t('loading.messages') || [
+        'جاري تحليل الرابط والتحقق الهيكلي...',
+        'فحص قواعد البيانات العالمية للتهديدات...',
+        'التحقق عبر نموذجات التعلم الآلي والذكاء الاصطناعي...',
+        'تحليل مؤشرات الاحتيال والانتحال...',
+        'إعداد التقرير التفسيري الشامل...',
+      ]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -43,18 +61,26 @@ export default function LoadingScreen({ url, onCancel }) {
         </div>
 
         {/* Title */}
-        <h2 className="loading-title">{t('loading.title')}</h2>
+        <h2 className="loading-title">
+          {isText
+            ? (lang === 'ar' ? 'جاري فحص الرسالة النصية واصطياد الاحتيال' : 'Performing SMS Smishing & Fraud Analysis')
+            : t('loading.title')}
+        </h2>
 
         {/* Message with ARIA live feedback */}
         <p className="loading-message" key={messageIndex} aria-live="polite">
           {messages[messageIndex]}
         </p>
 
-        {/* URL Display */}
+        {/* URL / Message Display */}
         {url && (
           <div className="loading-url-box">
-            <span className="loading-url-label">{t('loading.urlLabel')}</span>
-            <span className="loading-url-value" dir="ltr">
+            <span className="loading-url-label">
+              {isText
+                ? (lang === 'ar' ? 'نص الرسالة:' : 'Message Content:')
+                : t('loading.urlLabel')}
+            </span>
+            <span className="loading-url-value" dir="auto">
               {url}
             </span>
           </div>
