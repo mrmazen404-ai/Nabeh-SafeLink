@@ -57,12 +57,29 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
           })}
         </nav>
 
-          <div className="header-actions">
+        <div className="header-actions">
           <HelpMenu activeTab={activeTab} setActiveTab={setActiveTab} />
-          <button type="button" className="header-preference-btn" onClick={toggleLanguage} aria-label={t('nav.changeLanguage')} title={t('nav.changeLanguage')}><GlobeIcon size={15} /><span>{lang === 'ar' ? 'English' : 'العربية'}</span></button>
-          <button type="button" className="header-preference-btn header-theme-btn" onClick={toggleTheme} aria-label={t('auth.toggleTheme')} title={t('auth.toggleTheme')}>{theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}</button>
+          <button
+            type="button"
+            className="header-preference-btn"
+            onClick={toggleLanguage}
+            aria-label={t('nav.changeLanguage')}
+            title={t('nav.changeLanguage')}
+          >
+            <GlobeIcon size={15} />
+            <span>{lang === 'ar' ? 'English' : 'العربية'}</span>
+          </button>
+          <button
+            type="button"
+            className="header-preference-btn header-theme-btn"
+            onClick={toggleTheme}
+            aria-label={t('auth.toggleTheme')}
+            title={t('auth.toggleTheme')}
+          >
+            {theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}
+          </button>
           {!isGuest && user ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="header-user-group">
               <button
                 type="button"
                 className="header-preference-btn header-profile-btn"
@@ -70,12 +87,9 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
                 aria-label={t('nav.profileAria')}
                 title={t('nav.profile')}
               >
-                <UserIcon size={16} />
-                <span>{t('nav.profile')}</span>
+                <UserIcon size={15} />
+                <span className="header-username">{user.display_name || user.email}</span>
               </button>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-primary)' }}>
-                {user.display_name || user.email}
-              </span>
               <button
                 type="button"
                 onClick={async () => {
@@ -90,7 +104,7 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
           ) : (
             <button
               type="button"
-              onClick={() => onNavigateAuth ? onNavigateAuth('login') : navigate('/login')}
+              onClick={() => (onNavigateAuth ? onNavigateAuth('login') : navigate('/login'))}
               className="header-login-btn"
             >
               {t('auth.login')}

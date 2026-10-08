@@ -4,14 +4,12 @@ import { useLanguage } from '../context/LanguageContext';
 export default function BottomNav({ activeTab, setActiveTab, isGuest = false }) {
   const { t } = useLanguage();
   if (isGuest) return null;
-
   const tabs = [
     { id: 'home', label: t('nav.home'), icon: ShieldIcon },
     { id: 'scan', label: t('nav.scan'), icon: ShieldIcon },
     { id: 'history', label: t('nav.history'), icon: BarChartIcon },
     { id: 'stats', label: t('nav.stats'), icon: InfoIcon },
   ];
-
   return (
     <nav className="mobile-bottom-nav" aria-label={t('nav.home')}>
       {tabs.map((item) => {
