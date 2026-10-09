@@ -1,18 +1,18 @@
 .register-page .login-shell {
-  padding-top: 24px;
-  padding-bottom: 24px;
+  padding: 20px 24px;
 }
 
 .register-page .login-branding {
-  margin-bottom: 24px;
+  margin-bottom: 14px;
 }
 
 .register-page .login-form {
-  gap: 14px;
+  gap: 10px;
 }
 
 .register-page .login-divider {
-  margin-top: 24px;
+  margin-top: 14px;
+  margin-bottom: 10px;
 }
 
 .password-criteria-box {
