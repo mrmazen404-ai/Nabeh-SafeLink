@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import {
@@ -6,13 +6,19 @@ import {
   CheckCircleIcon,
   AlertTriangleIcon,
   SendIcon,
-  HelpCircleIcon
+  HelpCircleIcon,
+  UserIcon,
+  LockIcon,
 } from '../components/Icons';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { submitSupportRequest } from '../services/api';
 
 export default function Contact({ activeTab, setActiveTab }) {
   const { t } = useLanguage();
+  const { user, isGuest } = useAuth();
+  const navigate = useNavigate();
 
   const [requestType, setRequestType] = useState('scan_issue');
   const [email, setEmail] = useState('');
@@ -23,6 +29,12 @@ export default function Contact({ activeTab, setActiveTab }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [submittedTicket, setSubmittedTicket] = useState(null);
+
+  useEffect(() => {
+    if (user && user.email) {
+      setEmail(user.email);
+    }
+  }, [user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -59,8 +71,13 @@ export default function Contact({ activeTab, setActiveTab }) {
         setSubmittedTicket(fallbackTicket);
       }
     } catch (err) {
-      const fallbackTicket = 'TK-' + Math.floor(10000 + Math.random() * 90000);
-      setSubmittedTicket(fallbackTicket);
+      const serverDetail = err?.response?.data?.detail;
+      if (err?.response?.status === 401) {
+        setErrorMessage(serverDetail || 'جلسة التوثيق منتهية. يرجى تسجيل الدخول مجدداً.');
+      } else {
+        const fallbackTicket = 'TK-' + Math.floor(10000 + Math.random() * 90000);
+        setSubmittedTicket(fallbackTicket);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -117,8 +134,48 @@ export default function Contact({ activeTab, setActiveTab }) {
             </div>
           </div>
 
-          {/* Main Form or Success Screen */}
-          {!submittedTicket ? (
+          {/* Policy Lock Screen for Guests OR Main Form for Authenticated Users */}
+          {isGuest || !user ? (
+            /* Guest Policy Card */
+            <div className="guest-policy-card">
+              <div className="policy-icon-badge">
+                <LockIcon size={32} color="var(--color-secondary)" />
+              </div>
+              <h2>التواصل مع المطور يتطلب إنشاء حساب</h2>
+              <p className="policy-desc">
+                لحماية أمان المنظومة وضمان متابعة تذاكر الدعم والرد عليها بدقة، يتطلب إرسال الرسائل والاستفسارات أو التواصل المباشر مع مطوري النظام وجود حساب مفعّل وتسجيل الدخول لحسابك المعتمد.
+              </p>
+
+              <div className="policy-actions">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => navigate('/login?next=/contact')}
+                >
+                  <UserIcon size={16} />
+                  <span>تسجيل الدخول</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => navigate('/register?next=/contact')}
+                >
+                  <span>إنشاء حساب جديد</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setActiveTab('faq')}
+                >
+                  <HelpCircleIcon size={16} />
+                  <span>الأسئلة الشائعة</span>
+                </button>
+              </div>
+            </div>
+          ) : !submittedTicket ? (
+            /* Authenticated Contact Form */
             <form className="contact-form-card" onSubmit={handleSubmit} noValidate>
               {errorMessage && (
                 <div className="form-error-banner" role="alert">
@@ -144,16 +201,18 @@ export default function Contact({ activeTab, setActiveTab }) {
                 </select>
               </div>
 
-              {/* Email */}
+              {/* Verified Email Field (Pre-filled and Locked to User's Account) */}
               <div className="form-group">
-                <label htmlFor="contactEmail">{t('contact.emailLabel')}</label>
+                <label htmlFor="contactEmail">
+                  {t('contact.emailLabel')}{' '}
+                  <span className="verified-badge">✓ البريد المعتمد للحساب</span>
+                </label>
                 <input
                   id="contactEmail"
                   type="email"
-                  className="form-control"
-                  placeholder={t('contact.emailPlaceholder')}
+                  className="form-control verified-input"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  readOnly
                   required
                 />
               </div>
@@ -387,6 +446,54 @@ export default function Contact({ activeTab, setActiveTab }) {
           color: var(--color-text-muted);
         }
 
+        /* Guest Policy Card */
+        .guest-policy-card {
+          background: var(--color-surface);
+          border: 1.5px solid color-mix(in srgb, var(--color-secondary) 30%, var(--color-border));
+          border-radius: var(--radius-lg);
+          padding: 36px 24px;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
+          box-shadow: var(--shadow-md);
+        }
+
+        .policy-icon-badge {
+          width: 64px;
+          height: 64px;
+          border-radius: 50%;
+          background: var(--color-secondary-subtle);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .guest-policy-card h2 {
+          margin: 0;
+          font-size: 19px;
+          font-weight: 700;
+          color: var(--color-primary);
+        }
+
+        .policy-desc {
+          margin: 0;
+          font-size: 13.5px;
+          line-height: 1.65;
+          color: var(--color-text-secondary);
+          max-width: 540px;
+        }
+
+        .policy-actions {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-top: 12px;
+        }
+
         .contact-form-card {
           background: var(--color-surface);
           border: 1px solid var(--color-border);
@@ -421,6 +528,25 @@ export default function Contact({ activeTab, setActiveTab }) {
           font-size: 14px;
           font-weight: 600;
           color: var(--color-text);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .verified-badge {
+          font-size: 11.5px;
+          font-weight: 600;
+          color: var(--color-success);
+          background: var(--color-success-bg);
+          border: 1px solid var(--color-success-border);
+          padding: 2px 8px;
+          border-radius: var(--radius-sm);
+        }
+
+        .verified-input {
+          background: var(--color-bg-subtle) !important;
+          color: var(--color-text-secondary) !important;
+          cursor: not-allowed;
         }
 
         .form-control {
@@ -543,9 +669,13 @@ export default function Contact({ activeTab, setActiveTab }) {
           .form-actions {
             flex-direction: column-reverse;
           }
-          .btn-primary, .btn-secondary {
+          .btn-primary, .btn-secondary, .btn-outline {
             width: 100%;
             justify-content: center;
+          }
+          .policy-actions {
+            flex-direction: column;
+            width: 100%;
           }
         }
       `}</style>

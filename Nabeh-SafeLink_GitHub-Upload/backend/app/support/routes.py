@@ -23,17 +23,22 @@ class SupportContactRequest(BaseModel):
     scan_id: Optional[str] = Field(default=None, max_length=128)
     details: str = Field(min_length=1, max_length=4096)
 
-def _get_optional_user_id(authorization: Optional[str]) -> Optional[str]:
+def _get_required_user_id(authorization: Optional[str]) -> str:
     if not authorization or not isinstance(authorization, str):
-        return None
+        raise HTTPException(
+            status_code=401,
+            detail="التواصل مع المطور يتطلب تسجيل الدخول وإنشاء حساب مفعّل",
+        )
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer" or not parts[1].strip():
-        return None
+        raise HTTPException(status_code=401, detail="جلسة غير صالحة. يرجى تسجيل الدخول مجدداً")
     try:
         user = get_authenticated_user(parts[1])
-        return str(user.get("id")) if user else None
+        if not user or not user.get("id"):
+            raise HTTPException(status_code=401, detail="التواصل مع المطور يتطلب حساباً مفعّلاً")
+        return str(user["id"])
     except AuthSecurityError:
-        return None
+        raise HTTPException(status_code=401, detail="جلسة منتهية الصلاحية. يرجى إعادة تسجيل الدخول")
 
 
 @router.post("/contact")
@@ -41,9 +46,9 @@ async def create_support_request(
     request: SupportContactRequest,
     authorization: Optional[str] = Header(None),
 ):
-    """Save a user contact/support ticket into Supabase database."""
+    """Save a user contact/support ticket into Supabase database (Authenticated users only)."""
+    user_id = _get_required_user_id(authorization)
     ticket_id = f"TK-{random.randint(10000, 99999)}"
-    user_id = _get_optional_user_id(authorization)
     recipient = mask_email(request.email)
 
     full_message = f"Request Type: {request.request_type}\nScan ID: {request.scan_id or 'N/A'}\n\nDetails:\n{request.details}"
