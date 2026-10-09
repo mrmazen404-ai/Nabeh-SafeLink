@@ -122,7 +122,7 @@ export default function Footer({ activeTab, setActiveTab }) {
         <div className="footer-notice-card">
           <div className="notice-card-header">
             <ShieldCheckIcon size={18} color="var(--color-secondary)" />
-            <span className="notice-card-title">{t('footer.securityTitle', 'حماية موثوقة')}</span>
+            <span className="notice-card-title">{t('footer.securityTitle')}</span>
           </div>
           <p className="footer-notice-text">
             {t('footer.securityNotice')}
@@ -138,12 +138,13 @@ export default function Footer({ activeTab, setActiveTab }) {
 
       <style>{`
         .app-footer {
-          background: var(--color-surface, #ffffff);
+          background: var(--color-bg);
           border-top: 1px solid var(--color-border);
           margin-top: var(--space-8, 48px);
           padding: 48px 24px 28px;
           color: var(--color-text-secondary);
           font-size: 14px;
+          transition: background var(--transition-base, 0.2s ease), border-color var(--transition-base, 0.2s ease);
         }
 
         .footer-container {
@@ -187,7 +188,7 @@ export default function Footer({ activeTab, setActiveTab }) {
           align-items: center;
           gap: 6px;
           padding: 5px 12px;
-          background: var(--color-bg);
+          background: var(--color-bg-subtle);
           border: 1px solid var(--color-border);
           border-radius: var(--radius-md, 8px);
           font-size: 12px;
@@ -204,7 +205,7 @@ export default function Footer({ activeTab, setActiveTab }) {
         .footer-column-title {
           font-size: 15px;
           font-weight: 700;
-          color: var(--color-primary);
+          color: var(--color-text);
           margin: 0;
         }
 
@@ -235,11 +236,10 @@ export default function Footer({ activeTab, setActiveTab }) {
         .footer-link-btn:hover,
         .footer-link-btn.active {
           color: var(--color-secondary);
-          transform: translateX(dir === 'rtl' ? -3px : 3px);
         }
 
         .footer-notice-card {
-          background: var(--color-bg-subtle, #f8fafc);
+          background: var(--color-bg-subtle);
           border: 1px solid var(--color-border);
           border-radius: var(--radius-lg, 12px);
           padding: 18px;
@@ -257,7 +257,7 @@ export default function Footer({ activeTab, setActiveTab }) {
         .notice-card-title {
           font-size: 13px;
           font-weight: 700;
-          color: var(--color-primary);
+          color: var(--color-text);
         }
 
         .footer-notice-text {

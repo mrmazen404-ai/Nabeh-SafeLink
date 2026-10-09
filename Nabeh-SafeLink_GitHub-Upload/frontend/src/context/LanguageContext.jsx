@@ -325,6 +325,7 @@ export const translations = {
       rights: 'جميع الحقوق محفوظة © {year} نبيه SafeLink.',
       supportSection: 'المساعدة والدعم',
       quickLinksSection: 'روابط سريعة',
+      securityTitle: 'حماية موثوقة',
       securityNotice: 'تنبيه: نبيه أداة إرشادية مساعدة لتقييم مؤشرات الخطر قبل اتخاذ القرار.',
     },
     auth: {
@@ -1079,6 +1080,7 @@ export const translations = {
       rights: 'All rights reserved © {year} Nabeh SafeLink.',
       supportSection: 'Help & Support',
       quickLinksSection: 'Quick Links',
+      securityTitle: 'Trusted Protection',
       securityNotice: 'Notice: Nabeh is a decision-support guidance tool to assess threat indicators before taking action.',
     }
   }
