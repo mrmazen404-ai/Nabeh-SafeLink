@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Logo from '../../components/Logo';
 import { useAuth } from '../../context/AuthContext';
-import { AlertTriangleIcon, ArrowLeftIcon, ArrowRightIcon, UserIcon } from '../../components/Icons';
+import { AlertTriangleIcon, ArrowLeftIcon, ArrowRightIcon, MailIcon } from '../../components/Icons';
 import { useLanguage } from '../../context/LanguageContext';
 import AuthPageControls from '../../components/AuthPageControls';
 import './login.css';
@@ -71,7 +71,8 @@ export default function Login({ onNavigate }) {
     }
   };
 
-  const BackIcon = dir === 'rtl' ? ArrowRightIcon : ArrowLeftIcon;
+  const SubmitArrow = dir === 'rtl' ? ArrowLeftIcon : ArrowRightIcon;
+  const BackArrow = dir === 'rtl' ? ArrowRightIcon : ArrowLeftIcon;
 
   return (
     <main className="login-page" dir={dir}>
@@ -88,7 +89,7 @@ export default function Login({ onNavigate }) {
 
         <form className="login-form" onSubmit={handleSubmit} noValidate>
           <label className="login-field">
-            <span className="login-field-icon"><UserIcon size={19} color="currentColor" /></span>
+            <span className="login-field-icon"><MailIcon size={19} color="currentColor" /></span>
             <input
               type="email"
               dir={dir}
@@ -127,7 +128,7 @@ export default function Login({ onNavigate }) {
 
           <button className="login-submit" type="submit" disabled={loading}>
             <span>{loading ? '…' : t('auth.login')}</span>
-            <BackIcon size={17} color="currentColor" />
+            <SubmitArrow size={17} color="currentColor" />
           </button>
         </form>
 
@@ -138,7 +139,7 @@ export default function Login({ onNavigate }) {
         </div>
 
         <p className="login-register">{t('auth.noAccount')} <button type="button" onClick={() => onNavigate('register')}>{t('auth.register')}</button></p>
-        <button type="button" className="login-guest" onClick={() => onNavigate('scan')}><BackIcon size={15} /> {t('auth.continueGuest')}</button>
+        <button type="button" className="login-guest" onClick={() => onNavigate('scan')}><BackArrow size={15} /> {t('auth.continueGuest')}</button>
       </div>
     </main>
   );

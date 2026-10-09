@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Logo from '../../components/Logo';
 import { useAuth } from '../../context/AuthContext';
-import { AlertTriangleIcon, ArrowLeftIcon, ArrowRightIcon, UserIcon } from '../../components/Icons';
+import { AlertTriangleIcon, ArrowLeftIcon, ArrowRightIcon, UserIcon, MailIcon } from '../../components/Icons';
 import { useLanguage } from '../../context/LanguageContext';
 import AuthPageControls from '../../components/AuthPageControls';
 import './login.css';
@@ -88,7 +88,7 @@ export default function Register({ onNavigate }) {
     }
   };
 
-  const BackIcon = dir === 'rtl' ? ArrowRightIcon : ArrowLeftIcon;
+  const SubmitArrow = dir === 'rtl' ? ArrowLeftIcon : ArrowRightIcon;
 
   return (
     <main className="login-page register-page" dir={dir}>
@@ -108,7 +108,7 @@ export default function Register({ onNavigate }) {
           </label>
 
           <label className="login-field">
-            <span className="login-field-icon"><UserIcon size={19} color="currentColor" /></span>
+            <span className="login-field-icon"><MailIcon size={19} color="currentColor" /></span>
             <input type="email" dir={dir} autoComplete="email" placeholder={t('auth.emailAddress')} value={email} onChange={(event) => { setEmail(event.target.value); setError(''); }} aria-label={t('auth.emailAddress')} required />
           </label>
 
@@ -145,7 +145,7 @@ export default function Register({ onNavigate }) {
           {error && <div className="login-error" role="alert" aria-live="polite"><AlertTriangleIcon size={17} color="currentColor" /><span>{error}</span></div>}
           {successMsg && <div className="register-success" role="status" aria-live="polite">{successMsg}</div>}
 
-          <button className="login-submit" type="submit" disabled={loading}><span>{loading ? '…' : t('auth.registerAction')}</span><BackIcon size={17} /></button>
+          <button className="login-submit" type="submit" disabled={loading}><span>{loading ? '…' : t('auth.registerAction')}</span><SubmitArrow size={17} /></button>
         </form>
 
         <div className="login-divider"><span>{t('auth.socialDivider')}</span></div>
