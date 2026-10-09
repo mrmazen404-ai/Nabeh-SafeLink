@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -74,14 +74,13 @@ function ProtectedRoute() {
 
 function GuestRoute() {
   const { isGuest, loading } = useAuth();
-  if (loading) return <LoadingRoute />;
+  if (loading) return null;
   if (!isGuest) return <Navigate to="/" replace />;
   return <Outlet />;
 }
 
 function PublicRoute() {
-  const { loading } = useAuth();
-  return loading ? <LoadingRoute /> : <Outlet />;
+  return <Outlet />;
 }
 
 function NavigationLayout({ initialScanUrl, onQuickScan, onClearInitial, onNavigateAuth }) {
