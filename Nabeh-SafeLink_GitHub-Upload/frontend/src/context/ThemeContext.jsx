@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
 const ThemeContext = createContext();
 
@@ -16,6 +16,7 @@ export function ThemeProvider({ children }) {
   });
 
   const [animatingTheme, setAnimatingTheme] = useState(null);
+  const timeoutRef = useRef(null);
 
   useEffect(() => {
     try {
@@ -26,31 +27,32 @@ export function ThemeProvider({ children }) {
     }
   }, [theme]);
 
-  const triggerTransition = useCallback((targetTheme) => {
-    if (animatingTheme) return; // Prevent double trigger
-    setAnimatingTheme(targetTheme);
-
-    // Switch theme state in middle of cloud sweep
-    setTimeout(() => {
-      setThemeState(targetTheme);
-    }, 380);
-
-    // End animation state
-    setTimeout(() => {
-      setAnimatingTheme(null);
-    }, 850);
-  }, [animatingTheme]);
-
   const toggleTheme = useCallback(() => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    triggerTransition(nextTheme);
-  }, [theme, triggerTransition]);
+    setThemeState((prevTheme) => {
+      const nextTheme = prevTheme === 'dark' ? 'light' : 'dark';
+
+      // Trigger cloud animation concurrently for fast responsive feedback
+      setAnimatingTheme(nextTheme);
+
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        setAnimatingTheme(null);
+      }, 650);
+
+      return nextTheme;
+    });
+  }, []);
 
   const setTheme = useCallback((newTheme) => {
-    if ((newTheme === 'dark' || newTheme === 'light') && newTheme !== theme) {
-      triggerTransition(newTheme);
+    if (newTheme === 'dark' || newTheme === 'light') {
+      setThemeState(newTheme);
+      setAnimatingTheme(newTheme);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        setAnimatingTheme(null);
+      }, 650);
     }
-  }, [theme, triggerTransition]);
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
