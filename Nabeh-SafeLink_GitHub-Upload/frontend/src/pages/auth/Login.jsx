@@ -18,14 +18,6 @@ function EyeOffIcon({ size = 20, color = 'currentColor' }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 3 18 18M10.6 6.2A10.6 10.6 0 0 1 12 6c6.5 0 10 6 10 6a18.7 18.7 0 0 1-3.1 3.8M6.3 6.3C3.6 8.1 2 12 2 12s3.5 6 10 6c1.2 0 2.3-.2 3.3-.6" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>;
 }
 
-function GoogleIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.7-.06-1.37-.18-2.02H12v3.83h5.38a4.6 4.6 0 0 1-1.99 3.02v2.5h3.22c1.89-1.74 2.99-4.3 2.99-7.33Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.44l-3.22-2.5c-.9.6-2.05.96-3.39.96-2.61 0-4.82-1.76-5.61-4.13H3.06v2.58A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.39 13.89A6.02 6.02 0 0 1 6.08 12c0-.66.11-1.3.31-1.89V7.53H3.06A10 10 0 0 0 2 12c0 1.61.38 3.13 1.06 4.47l3.33-2.58Z"/><path fill="#EA4335" d="M12 5.98c1.47 0 2.8.5 3.84 1.49l2.88-2.88C16.95 2.93 14.7 2 12 2a10 10 0 0 0-8.94 5.53l3.33 2.58C7.18 7.74 9.39 5.98 12 5.98Z"/></svg>;
-}
-
-function AppleIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.05 12.54c-.02-2.1 1.72-3.12 1.8-3.17a3.87 3.87 0 0 0-3.05-1.65c-1.29-.13-2.53.77-3.18.77-.66 0-1.68-.75-2.76-.73a4.06 4.06 0 0 0-3.42 2.08c-1.48 2.56-.38 6.34 1.04 8.41.7 1.01 1.52 2.14 2.6 2.1 1.04-.04 1.43-.67 2.68-.67 1.25 0 1.6.67 2.7.65 1.12-.02 1.82-1.02 2.5-2.04a8.37 8.37 0 0 0 1.14-2.35 3.64 3.64 0 0 1-2.05-3.4ZM14.96 6.36a3.7 3.7 0 0 0 .85-2.66 3.76 3.76 0 0 0-2.45 1.27 3.53 3.53 0 0 0-.88 2.56 3.1 3.1 0 0 0 2.48-1.17Z"/></svg>;
-}
-
 function getLoginError(error, isArabic) {
   const status = error?.response?.status;
   if (status === 401) return isArabic ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' : 'The email or password is incorrect.';
@@ -131,12 +123,6 @@ export default function Login({ onNavigate }) {
             <SubmitArrow size={17} color="currentColor" />
           </button>
         </form>
-
-        <div className="login-divider"><span>{t('auth.socialDivider')}</span></div>
-        <div className="login-social" aria-label="Social login options">
-          <button type="button" className="login-social-button" aria-label={t('auth.socialGoogle')} title={t('auth.socialGoogle')}><GoogleIcon /></button>
-          <button type="button" className="login-social-button" aria-label={t('auth.socialApple')} title={t('auth.socialApple')}><AppleIcon /></button>
-        </div>
 
         <p className="login-register">{t('auth.noAccount')} <button type="button" onClick={() => onNavigate('register')}>{t('auth.register')}</button></p>
         <button type="button" className="login-guest" onClick={() => onNavigate('scan')}><BackArrow size={15} /> {t('auth.continueGuest')}</button>
