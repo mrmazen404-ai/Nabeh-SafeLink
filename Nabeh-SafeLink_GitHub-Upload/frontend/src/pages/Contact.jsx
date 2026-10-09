@@ -161,6 +161,7 @@ export default function Contact({ activeTab, setActiveTab }) {
                   className="btn-outline"
                   onClick={() => navigate('/register?next=/contact')}
                 >
+                  <UserIcon size={16} />
                   <span>إنشاء حساب جديد</span>
                 </button>
 
@@ -631,6 +632,33 @@ export default function Contact({ activeTab, setActiveTab }) {
           font-size: 14px;
           font-weight: 500;
           cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          transition: all var(--transition-fast, 0.2s ease);
+        }
+
+        .btn-outline {
+          background: var(--color-bg);
+          color: var(--color-primary);
+          border: 1.5px solid var(--color-border-strong, var(--color-border));
+          padding: 10px 20px;
+          border-radius: var(--radius-md);
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          transition: all var(--transition-fast, 0.2s ease);
+        }
+
+        .btn-outline:hover {
+          background: var(--color-secondary-subtle);
+          border-color: var(--color-secondary);
+          color: var(--color-secondary);
         }
 
         .contact-success-card {

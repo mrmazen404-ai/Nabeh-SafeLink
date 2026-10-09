@@ -30,7 +30,6 @@ SUSPICIOUS_EXTENSIONS = (
     ".exe", ".scr", ".zip", ".rar", ".7z", ".msi",
     ".bat", ".cmd", ".js", ".jar", ".apk",
 )
-
 TOP_SAFE_DOMAINS = {
     "google.com", "youtube.com", "microsoft.com", "apple.com", "amazon.com",
     "github.com", "wikipedia.org", "cloudflare.com", "linkedin.com", "twitter.com",
@@ -39,7 +38,6 @@ TOP_SAFE_DOMAINS = {
     "salla.sa", "zid.sa", "stc.com.sa", "mobily.com.sa", "alrajhibank.com.sa",
     "snb.com.sa", "pypi.org", "npmjs.com", "python.org", "vercel.app",
 }
-
 # Preferred model is retrained LightGBM model, falling back to original model
 RETRAINED_MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model_retrained.joblib")
 ORIGINAL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model.joblib")
@@ -90,8 +88,6 @@ def parse_url(raw_url: str):
         return url, parsed, hostname, port
     except Exception:
         return url, None, "", None
-
-
 def shannon_entropy(text: str) -> float:
     if not text:
         return 0.0
@@ -189,7 +185,6 @@ def extract_features(raw_url: str) -> dict:
         "dot_count_domain": dot_domain,
         "at_count_url": at_count,
         "percent_count_url": percent_count,
-
         "is_https": int(scheme == "https"),
         "has_ip_host": is_ipv4,
         "has_port": int(port is not None),
@@ -286,8 +281,6 @@ def predict_url(url: str) -> dict:
             "confidence": 0.5,
             "source": "MODEL_ERROR",
         }
-
-
 if __name__ == "__main__":
     test_urls = [
         "https://www.google.com",
