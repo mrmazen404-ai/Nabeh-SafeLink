@@ -58,5 +58,4 @@ urllib3==2.8.0
 uvicorn==0.54.0
 websockets==15.0.1
 yarl==1.25.1
-
 scikit-learn==1.9.1

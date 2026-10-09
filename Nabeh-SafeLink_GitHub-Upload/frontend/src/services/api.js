@@ -58,4 +58,15 @@ export const getStatistics = async () => {
   return response.data;
 };
 
+export const submitSupportRequest = async ({ requestType, email, subject, scanId, details }) => {
+  const response = await api.post('/support/contact', {
+    request_type: requestType,
+    email,
+    subject,
+    scan_id: scanId || null,
+    details,
+  });
+  return response.data;
+};
+
 export default api;

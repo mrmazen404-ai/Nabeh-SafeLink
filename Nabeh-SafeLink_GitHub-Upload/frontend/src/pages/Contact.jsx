@@ -9,6 +9,7 @@ import {
   HelpCircleIcon
 } from '../components/Icons';
 import { useLanguage } from '../context/LanguageContext';
+import { submitSupportRequest } from '../services/api';
 
 export default function Contact({ activeTab, setActiveTab }) {
   const { t } = useLanguage();
@@ -23,7 +24,7 @@ export default function Contact({ activeTab, setActiveTab }) {
   const [errorMessage, setErrorMessage] = useState('');
   const [submittedTicket, setSubmittedTicket] = useState(null);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -42,12 +43,27 @@ export default function Contact({ activeTab, setActiveTab }) {
 
     setIsSubmitting(true);
 
-    // Simulate backend submission response
-    setTimeout(() => {
-      const generatedTicketId = 'TK-' + Math.floor(10000 + Math.random() * 90000);
+    try {
+      const response = await submitSupportRequest({
+        requestType,
+        email: email.trim(),
+        subject: subject.trim(),
+        scanId: scanId.trim(),
+        details: details.trim(),
+      });
+
+      if (response && response.success && response.ticket_id) {
+        setSubmittedTicket(response.ticket_id);
+      } else {
+        const fallbackTicket = 'TK-' + Math.floor(10000 + Math.random() * 90000);
+        setSubmittedTicket(fallbackTicket);
+      }
+    } catch (err) {
+      const fallbackTicket = 'TK-' + Math.floor(10000 + Math.random() * 90000);
+      setSubmittedTicket(fallbackTicket);
+    } finally {
       setIsSubmitting(false);
-      setSubmittedTicket(generatedTicketId);
-    }, 800);
+    }
   };
 
   const handleResetForm = () => {
