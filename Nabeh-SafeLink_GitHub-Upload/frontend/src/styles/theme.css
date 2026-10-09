@@ -402,7 +402,10 @@ a:focus-visible {
   border-radius: var(--radius-md);
   background: var(--color-bg);
   color: var(--color-text-secondary);
-  font: 600 12px/1 var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  font-family: var(--font-sans);
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
@@ -425,7 +428,10 @@ a:focus-visible {
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   padding: 0 16px;
-  font: 700 13px/1 var(--font-sans);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  font-family: var(--font-sans);
   cursor: pointer;
   color: #ffffff;
   background: var(--color-primary);
@@ -448,7 +454,10 @@ a:focus-visible {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 0 12px;
-  font: 600 12px/1 var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  font-family: var(--font-sans);
   cursor: pointer;
   color: var(--color-danger);
   background: transparent;
