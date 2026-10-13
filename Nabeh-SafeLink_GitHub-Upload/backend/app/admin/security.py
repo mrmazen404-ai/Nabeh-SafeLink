@@ -15,6 +15,9 @@ from cryptography.fernet import Fernet, InvalidToken
 from app.config import settings
 
 
+JWT_ALGORITHM = "HS256"
+
+
 class AdminSecurityError(Exception):
     """Raised when an administrator credential is invalid."""
 
@@ -37,13 +40,17 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, encoded: str) -> bool:
+    """Verify only bounded scrypt parameters to avoid a stored-hash DoS."""
     try:
         scheme, n, r, p, salt_b64, digest_b64 = encoded.split("$", 5)
-        if scheme != "scrypt":
+        n_int, r_int, p_int = int(n), int(r), int(p)
+        if scheme != "scrypt" or not (2**14 <= n_int <= 2**20) or not (1 <= r_int <= 32) or not (1 <= p_int <= 8):
             return False
         salt = base64.urlsafe_b64decode(salt_b64.encode())
         expected = base64.urlsafe_b64decode(digest_b64.encode())
-        actual = hashlib.scrypt(password.encode(), salt=salt, n=int(n), r=int(r), p=int(p))
+        if len(salt) < 16 or len(salt) > 64 or not expected:
+            return False
+        actual = hashlib.scrypt(password.encode(), salt=salt, n=n_int, r=r_int, p=p_int)
         return hmac.compare_digest(actual, expected)
     except (ValueError, TypeError, UnicodeError):
         return False
@@ -85,18 +92,28 @@ def issue_token(subject: str, role: str, purpose: str, minutes: int, extra: dict
         "purpose": purpose,
         "jti": str(secrets.token_hex(16)),
         "iat": int(issued.timestamp()),
+        "nbf": int(issued.timestamp()),
         "exp": int((issued + timedelta(minutes=minutes)).timestamp()),
+        "iss": settings.ADMIN_JWT_ISSUER,
+        "aud": settings.ADMIN_JWT_AUDIENCE,
     }
     if extra:
         claims.update(extra)
-    return jwt.encode(claims, settings.ADMIN_JWT_SECRET, algorithm="HS256")
+    return jwt.encode(claims, settings.ADMIN_JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
 def decode_token(token: str, purpose: str | tuple[str, ...] = "access") -> dict[str, Any]:
     if not settings.ADMIN_JWT_SECRET:
         raise AdminSecurityError("ADMIN_JWT_SECRET is not configured")
     try:
-        claims = jwt.decode(token, settings.ADMIN_JWT_SECRET, algorithms=["HS256"])
+        claims = jwt.decode(
+            token,
+            settings.ADMIN_JWT_SECRET,
+            algorithms=[JWT_ALGORITHM],
+            issuer=settings.ADMIN_JWT_ISSUER,
+            audience=settings.ADMIN_JWT_AUDIENCE,
+            options={"require": ["sub", "type", "purpose", "jti", "iat", "nbf", "exp", "iss", "aud"]},
+        )
     except jwt.PyJWTError as exc:
         raise AdminSecurityError("invalid administrator token") from exc
     expected = (purpose,) if isinstance(purpose, str) else purpose

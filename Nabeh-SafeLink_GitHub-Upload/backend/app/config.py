@@ -15,6 +15,8 @@ class Settings:
     AUTH_OTP_MINUTES: int = int(os.getenv("AUTH_OTP_MINUTES", "10"))
     AUTH_OTP_MAX_ATTEMPTS: int = int(os.getenv("AUTH_OTP_MAX_ATTEMPTS", "5"))
     ADMIN_JWT_SECRET: str = os.getenv("ADMIN_JWT_SECRET", "")
+    ADMIN_JWT_ISSUER: str = os.getenv("ADMIN_JWT_ISSUER", "nabeh-admin")
+    ADMIN_JWT_AUDIENCE: str = os.getenv("ADMIN_JWT_AUDIENCE", "nabeh-admin-api")
     ADMIN_TOTP_ENCRYPTION_KEY: str = os.getenv("ADMIN_TOTP_ENCRYPTION_KEY", "")
     ADMIN_BOOTSTRAP_TOKEN: str = os.getenv("ADMIN_BOOTSTRAP_TOKEN", "")
     ADMIN_TOTP_ISSUER: str = os.getenv("ADMIN_TOTP_ISSUER", "Nabeh Admin")
@@ -22,6 +24,7 @@ class Settings:
     ADMIN_REFRESH_TOKEN_DAYS: int = int(os.getenv("ADMIN_REFRESH_TOKEN_DAYS", "7"))
     ADMIN_LOGIN_RATE_LIMIT: int = int(os.getenv("ADMIN_LOGIN_RATE_LIMIT", "5"))
     ADMIN_IP_SALT: str = os.getenv("ADMIN_IP_SALT", "")
+    NABEH_TRUST_PROXY_HEADERS: bool = os.getenv("NABEH_TRUST_PROXY_HEADERS", "false").lower() in {"1", "true", "yes"}
     APP_NAME: str = os.getenv("APP_NAME", "Nabeh SafeLink")
     APP_VERSION: str = os.getenv("APP_VERSION", "1.0.0")
     CORS_ALLOWED_ORIGINS: tuple = tuple(

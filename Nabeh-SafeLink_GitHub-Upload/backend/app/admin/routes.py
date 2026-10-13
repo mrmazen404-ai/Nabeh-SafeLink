@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 
-from app.admin.dependencies import bearer_token, client_ip, current_admin, require_roles
+from app.admin.dependencies import bearer_token, client_ip, current_admin, require_permissions, require_roles
 from app.admin.security import (
     AdminSecurityError, decrypt_totp_secret, encrypt_totp_secret, hash_password,
     hash_value, issue_access_token, issue_challenge_token, issue_setup_token,
@@ -70,19 +70,22 @@ def _audit(admin_id: str | None, action: str, resource_type: str, resource_id: s
     }).execute()
 
 
-def _tokens(admin: dict, request: Request, session_id: str | None = None) -> dict:
-    access = issue_access_token(admin, {"sid": session_id} if session_id else None)
+def _tokens(admin: dict, request: Request, token_family: str | None = None) -> dict:
     refresh = new_refresh_token()
     row = {
         "admin_user_id": str(admin["id"]),
         "refresh_token_hash": refresh_hash(refresh),
-        "token_family": str(uuid4()),
+        "token_family": token_family or str(uuid4()),
         "ip_hash": hash_value(client_ip(request)),
         "user_agent_hash": hash_value(request.headers.get("user-agent", "")),
         "expires_at": (now() + timedelta(days=settings.ADMIN_REFRESH_TOKEN_DAYS)).isoformat(),
     }
     result = supabase.table("admin_sessions").insert(row).execute()
-    return {"access_token": access, "refresh_token": refresh, "session_id": result.data[0]["id"] if result.data else None}
+    session_id = result.data[0]["id"] if result.data else None
+    if not session_id:
+        raise HTTPException(status_code=503, detail="Unable to create administrator session")
+    access = issue_access_token(admin, {"sid": session_id})
+    return {"access_token": access, "refresh_token": refresh, "session_id": session_id}
 
 
 @router.post("/auth/bootstrap", status_code=201)
@@ -114,6 +117,7 @@ def login(request: LoginRequest, http_request: Request):
     ip_hash = hash_value(client_ip(http_request))
     recent = supabase.table("admin_login_attempts").select("id", count="exact", head=True).eq("ip_hash", ip_hash).gte("created_at", (now() - timedelta(minutes=15)).isoformat()).in_("outcome", ["INVALID_CREDENTIALS", "INVALID_2FA", "RATE_LIMITED"]).execute()
     if (recent.count or 0) >= settings.ADMIN_LOGIN_RATE_LIMIT:
+        supabase.table("admin_login_attempts").insert({"email_hash": hash_value(email), "ip_hash": ip_hash, "outcome": "RATE_LIMITED", "failure_reason": "IP_WINDOW_EXCEEDED"}).execute()
         raise HTTPException(status_code=429, detail="Too many login attempts")
     admin = _admin_by_email(email)
     if not admin or admin.get("status") != "ACTIVE" or not verify_password(request.password, admin.get("password_hash", "")):
@@ -209,13 +213,33 @@ def refresh(request: RefreshRequest, http_request: Request):
     old_hash = refresh_hash(request.refresh_token)
     result = supabase.table("admin_sessions").select("*").eq("refresh_token_hash", old_hash).limit(1).execute()
     session = result.data[0] if result.data else None
-    if not session or session.get("revoked_at") or session.get("expires_at", "") <= now().isoformat():
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+    if session.get("revoked_at"):
+        supabase.table("admin_sessions").update({
+            "revoked_at": now().isoformat(),
+            "revoke_reason": "REUSE_DETECTED",
+        }).eq("admin_user_id", session["admin_user_id"]).eq(
+            "token_family", session["token_family"]
+        ).is_("revoked_at", "null").execute()
+        raise HTTPException(status_code=401, detail="Refresh token has already been used")
+    try:
+        expires_at = datetime.fromisoformat(session.get("expires_at", "").replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token") from None
+    if expires_at <= now():
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     admin = _admin_by_id(session["admin_user_id"])
     if not admin or admin.get("status") != "ACTIVE":
         raise HTTPException(status_code=401, detail="Admin is inactive")
-    supabase.table("admin_sessions").update({"revoked_at": now().isoformat(), "revoke_reason": "ROTATED"}).eq("id", session["id"]).execute()
-    tokens = _tokens(admin, http_request, str(session["id"]))
+    rotated = supabase.table("admin_sessions").update({
+        "revoked_at": now().isoformat(),
+        "last_used_at": now().isoformat(),
+        "revoke_reason": "ROTATED",
+    }).eq("id", session["id"]).is_("revoked_at", "null").execute()
+    if not rotated.data:
+        raise HTTPException(status_code=401, detail="Refresh token has already been used")
+    tokens = _tokens(admin, http_request, str(session["token_family"]))
     _audit(str(admin["id"]), "ADMIN_SESSION_ROTATED", "admin_session", str(session["id"]), http_request)
     return {"success": True, "data": tokens}
 
@@ -246,13 +270,13 @@ def me(admin: dict = Depends(current_admin)):
 
 
 @router.get("/sessions")
-def sessions(admin: dict = Depends(current_admin)):
+def sessions(admin: dict = Depends(require_permissions("sessions.read"))):
     result = supabase.table("admin_sessions").select("id,created_at,last_used_at,expires_at,revoked_at,revoke_reason,ip_hash,user_agent_hash").eq("admin_user_id", admin["id"]).order("created_at", desc=True).limit(100).execute()
     return {"success": True, "data": result.data or []}
 
 
 @router.delete("/sessions/{session_id}")
-def revoke_session(session_id: UUID, http_request: Request, admin: dict = Depends(current_admin)):
+def revoke_session(session_id: UUID, http_request: Request, admin: dict = Depends(require_permissions("sessions.manage"))):
     result = supabase.table("admin_sessions").update({"revoked_at": now().isoformat(), "revoke_reason": "ADMIN_REVOKED"}).eq("id", str(session_id)).eq("admin_user_id", admin["id"]).is_("revoked_at", "null").execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -261,7 +285,7 @@ def revoke_session(session_id: UUID, http_request: Request, admin: dict = Depend
 
 
 @router.get("/audit-logs")
-def audit_logs(limit: int = 50, offset: int = 0, admin: dict = Depends(require_roles("SUPERVISOR", "ADMIN", "SUPER_ADMIN"))):
+def audit_logs(limit: int = 50, offset: int = 0, admin: dict = Depends(require_permissions("audit.read"))):
     limit = max(1, min(limit, 100))
     result = supabase.table("admin_audit_logs").select("id,admin_user_id,action,resource_type,resource_id,target_user_id,target_scan_id,before_data,after_data,metadata_masked,created_at").order("created_at", desc=True).range(offset, offset + limit - 1).execute()
     return {"success": True, "data": result.data or []}
