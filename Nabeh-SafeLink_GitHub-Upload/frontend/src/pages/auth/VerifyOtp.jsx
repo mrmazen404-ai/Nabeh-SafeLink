@@ -67,6 +67,7 @@ export default function VerifyOtp({ onNavigate, email = '', type = 'signup' }) {
     setLoading(true);
     try {
       await verifyOtp(email.trim(), token, type);
+      sessionStorage.removeItem('nabeh_pending_otp');
       onNavigate(type === 'recovery' ? 'reset-password' : 'home');
     } catch {
       setError(t('auth.invalidCode'));

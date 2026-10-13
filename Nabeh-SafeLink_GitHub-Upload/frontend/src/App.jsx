@@ -156,8 +156,12 @@ function AuthNavigation() {
     if (!path) return;
 
     if (page === 'verify-otp') {
-      const params = new URLSearchParams({ email: data.email || '', type: data.type || 'signup' });
-      navigate(`${path}?${params.toString()}`);
+      const email = data.email || '';
+      const type = data.type || 'signup';
+      if (email) {
+        sessionStorage.setItem('nabeh_pending_otp', JSON.stringify({ email, type }));
+      }
+      navigate(path, { state: { email, type } });
       return;
     }
 
@@ -169,6 +173,17 @@ function AuthNavigation() {
 
     navigate(path);
   };
+}
+
+function VerifyOtpRoute({ onNavigateAuth }) {
+  const location = useLocation();
+  const query = new URLSearchParams(location.search);
+  const stored = JSON.parse(sessionStorage.getItem('nabeh_pending_otp') || '{}');
+
+  const email = location.state?.email || query.get('email') || stored.email || '';
+  const type = location.state?.type || query.get('type') || stored.type || 'signup';
+
+  return <VerifyOtp onNavigate={onNavigateAuth} email={email} type={type} />;
 }
 
 function OnboardingRoute() {
@@ -239,7 +254,7 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
         <Route path="/register" element={<Register onNavigate={onNavigateAuth} />} />
         <Route path="/forgot-password" element={<ForgotPassword onNavigate={onNavigateAuth} />} />
         <Route path="/reset-password" element={<ResetPassword onNavigate={onNavigateAuth} />} />
-        <Route path="/verify-otp" element={<VerifyOtp onNavigate={onNavigateAuth} email={query.get('email') || ''} type={query.get('type') || 'signup'} />} />
+        <Route path="/verify-otp" element={<VerifyOtpRoute onNavigateAuth={onNavigateAuth} />} />
       </Route>
 
       <Route element={<ProtectedRoute />}>
