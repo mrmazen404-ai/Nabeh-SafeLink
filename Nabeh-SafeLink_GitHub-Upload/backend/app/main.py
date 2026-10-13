@@ -142,7 +142,14 @@ if FRONTEND_INDEX.is_file():
 
     @app.get("/", include_in_schema=False)
     async def frontend_root():
-        return FileResponse(FRONTEND_INDEX)
+        return FileResponse(
+            FRONTEND_INDEX,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def frontend_spa(full_path: str):
@@ -159,7 +166,18 @@ if FRONTEND_INDEX.is_file():
                 media_type = "image/svg+xml"
             elif requested.suffix == ".json":
                 media_type = "application/json"
-            return FileResponse(requested, media_type=media_type)
+            return FileResponse(
+                requested,
+                media_type=media_type,
+                headers={"Cache-Control": "public, max-age=31536000, immutable"}
+            )
         if FRONTEND_INDEX.is_file():
-            return FileResponse(FRONTEND_INDEX)
+            return FileResponse(
+                FRONTEND_INDEX,
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                }
+            )
         raise HTTPException(status_code=404, detail="Not found")

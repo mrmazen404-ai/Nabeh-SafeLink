@@ -22,21 +22,42 @@ import ResetPassword from './pages/auth/ResetPassword';
 import VerifyOtp from './pages/auth/VerifyOtp';
 import WelcomePage from './pages/WelcomePage';
 import SessionCheckScreen from './components/SessionCheckScreen';
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Scanner = lazy(() => import('./pages/Scanner'));
-const History = lazy(() => import('./pages/History'));
-const Statistics = lazy(() => import('./pages/Statistics'));
-const ScanDetails = lazy(() => import('./pages/ScanDetails'));
-const Comparison = lazy(() => import('./pages/Comparison'));
-const ExportReport = lazy(() => import('./pages/ExportReport'));
-const Notifications = lazy(() => import('./pages/Notifications'));
-const AlertSettings = lazy(() => import('./pages/AlertSettings'));
-const About = lazy(() => import('./pages/About'));
-const Contact = lazy(() => import('./pages/Contact'));
-const Faq = lazy(() => import('./pages/Faq'));
-const UserGuide = lazy(() => import('./pages/UserGuide'));
-const LegalDocument = lazy(() => import('./pages/LegalDocument'));
-const DataPrivacy = lazy(() => import('./pages/DataPrivacy'));
+
+function lazyWithRetry(componentImport) {
+  return lazy(async () => {
+    const pageAlreadyRefreshed = JSON.parse(
+      sessionStorage.getItem('nabeh_chunk_retry') || 'false'
+    );
+    try {
+      const component = await componentImport();
+      sessionStorage.setItem('nabeh_chunk_retry', 'false');
+      return component;
+    } catch (error) {
+      if (!pageAlreadyRefreshed) {
+        sessionStorage.setItem('nabeh_chunk_retry', 'true');
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw error;
+    }
+  });
+}
+
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const Scanner = lazyWithRetry(() => import('./pages/Scanner'));
+const History = lazyWithRetry(() => import('./pages/History'));
+const Statistics = lazyWithRetry(() => import('./pages/Statistics'));
+const ScanDetails = lazyWithRetry(() => import('./pages/ScanDetails'));
+const Comparison = lazyWithRetry(() => import('./pages/Comparison'));
+const ExportReport = lazyWithRetry(() => import('./pages/ExportReport'));
+const Notifications = lazyWithRetry(() => import('./pages/Notifications'));
+const AlertSettings = lazyWithRetry(() => import('./pages/AlertSettings'));
+const About = lazyWithRetry(() => import('./pages/About'));
+const Contact = lazyWithRetry(() => import('./pages/Contact'));
+const Faq = lazyWithRetry(() => import('./pages/Faq'));
+const UserGuide = lazyWithRetry(() => import('./pages/UserGuide'));
+const LegalDocument = lazyWithRetry(() => import('./pages/LegalDocument'));
+const DataPrivacy = lazyWithRetry(() => import('./pages/DataPrivacy'));
 import ErrorPage from './components/ErrorPage';
 import BottomNav from './components/BottomNav';
 import './styles/theme.css';

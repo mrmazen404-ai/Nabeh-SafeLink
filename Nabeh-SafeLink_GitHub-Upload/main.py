@@ -57,5 +57,16 @@ async def frontend_fallback(full_path: str):
             media_type = "image/svg+xml"
         elif requested.suffix == ".json":
             media_type = "application/json"
-        return FileResponse(requested, media_type=media_type)
-    return FileResponse(FRONTEND_INDEX)
+        return FileResponse(
+            requested,
+            media_type=media_type,
+            headers={"Cache-Control": "public, max-age=31536000, immutable"}
+        )
+    return FileResponse(
+        FRONTEND_INDEX,
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
+    )
