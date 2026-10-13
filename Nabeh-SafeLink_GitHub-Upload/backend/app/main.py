@@ -132,7 +132,19 @@ def health():
 
 # Local production-like mode: one URL serves both the built React app and the API.
 # Vercel and Vite deployments can continue to use their own frontend serving path.
-FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+def _resolve_frontend_dist() -> Path:
+    candidates = [
+        Path.cwd() / "frontend" / "dist",
+        Path(__file__).resolve().parent.parent.parent / "frontend" / "dist",
+        Path(__file__).resolve().parent.parent / "frontend" / "dist",
+    ]
+    for candidate in candidates:
+        if (candidate / "index.html").is_file():
+            return candidate
+    return candidates[0]
+
+
+FRONTEND_DIST = _resolve_frontend_dist()
 FRONTEND_INDEX = FRONTEND_DIST / "index.html"
 
 if FRONTEND_INDEX.is_file():

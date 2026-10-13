@@ -4,7 +4,10 @@
   "regions": ["syd1"],
   "functions": {
     "main.py": {
-      "includeFiles": "{backend_bundle.zip,frontend/dist/**}"
+      "includeFiles": [
+        "frontend/dist/**",
+        "backend_bundle.zip"
+      ]
     }
   },
   "headers": [

@@ -28,7 +28,19 @@ from app.main import app  # noqa: E402
 # Keep API routes ahead of this SPA fallback.  FastAPI has no ``app.frontend``
 # helper; serving the built files explicitly also makes local and Vercel
 # behavior consistent.
-FRONTEND_DIST = ROOT / "frontend" / "dist"
+def _resolve_frontend_dist() -> Path:
+    candidates = [
+        Path.cwd() / "frontend" / "dist",
+        ROOT / "frontend" / "dist",
+        Path(__file__).resolve().parent / "frontend" / "dist",
+    ]
+    for candidate in candidates:
+        if (candidate / "index.html").is_file():
+            return candidate
+    return candidates[0]
+
+
+FRONTEND_DIST = _resolve_frontend_dist()
 FRONTEND_INDEX = FRONTEND_DIST / "index.html"
 
 
