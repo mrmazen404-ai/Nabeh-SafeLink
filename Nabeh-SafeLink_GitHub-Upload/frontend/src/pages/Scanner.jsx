@@ -290,19 +290,6 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
         </div>
       </main>
 
-      <style>{`
-        .scanner-desktop-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: var(--space-6);
-        }
-
-        @media (min-width: 900px) {
-          .scanner-desktop-grid {
-            grid-template-columns: 65% 35%;
-          }
-        }
-      `}</style>
     </div>
   );
 }

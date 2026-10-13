@@ -382,3 +382,51 @@
   .scanner-page .page-container { padding-inline: 12px; padding-top: 14px; padding-bottom: 24px; }
   .scanner-desktop-grid:has(> :only-child) .scanner-input-card { min-height: calc(100dvh - 245px); padding: 24px 18px !important; }
 }
+
+/* Phase 4: unified fluid Scanner layout, preserving URL/TEXT and recent scans. */
+.scanner-page .page-container { max-width: var(--layout-max); margin-inline: auto; }
+.scanner-desktop-grid { gap: clamp(18px, 4vw, 56px); }
+.scanner-desktop-grid > * { min-width: 0; }
+.scanner-guest-notice { padding: clamp(12px, 2.5vw, 16px); min-width: 0; }
+.scanner-guest-notice > span { min-width: 0; overflow-wrap: anywhere; }
+.scanner-toggle-bar { width: 100%; gap: 4px; }
+.scanner-toggle-btn { min-height: var(--control-height); padding-inline: clamp(8px, 2vw, 18px); }
+.scanner-input-card, .recent-section { padding: clamp(18px, 4vw, 42px); min-width: 0; }
+.scanner-hero-row { min-width: 0; }
+.scanner-hero-copy { min-width: 0; overflow-wrap: anywhere; }
+.scanner-title { font-size: clamp(24px, 4vw, 34px); overflow-wrap: anywhere; }
+.scanner-subtitle { overflow-wrap: anywhere; }
+.scanner-trust-row span { max-width: 100%; overflow-wrap: anywhere; }
+.scanner-input-wrapper { min-width: 0; }
+.scanner-input { min-height: var(--control-height); padding-inline-start: clamp(88px, 10vw, 115px); font-size: var(--text-base); }
+.input-action-btn { min-height: var(--touch-target); padding-inline: clamp(8px, 2vw, 16px); max-width: 34%; }
+.input-action-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scanner-error { overflow-wrap: anywhere; }
+.scanner-button { min-height: var(--control-height); }
+.recent-section { height: fit-content; }
+.recent-header { gap: 10px; flex-wrap: wrap; }
+.recent-title, .recent-count { overflow-wrap: anywhere; }
+.recent-item { min-width: 0; }
+
+@media (max-width: 899px) {
+  .scanner-page .page-container { max-width: var(--layout-max); }
+  .scanner-desktop-grid { gap: var(--section-gap); }
+}
+
+@media (max-width: 560px) {
+  .scanner-page .page-container { padding-inline: var(--content-gutter); }
+  .scanner-input-card, .recent-section { padding: clamp(18px, 5vw, 24px) !important; border-radius: clamp(18px, 5vw, 24px); }
+  .scanner-desktop-grid:has(> :only-child) .scanner-input-card { min-height: auto; justify-content: flex-start; }
+  .scanner-hero-row { gap: 10px; }
+  .scanner-trust-row { gap: 6px; }
+  .scanner-trust-row span { flex: 1 1 auto; justify-content: center; min-width: 0; }
+  .scanner-input { padding-inline-start: 88px; }
+  .input-action-btn { max-width: 31%; }
+}
+
+@media (max-width: 340px) {
+  .scanner-page .page-container { padding-inline: 12px; }
+  .scanner-input-card, .recent-section { padding-inline: 15px !important; }
+  .scanner-title { font-size: 23px; }
+  .scanner-trust-row span { font-size: 9px; padding-inline: 5px; }
+}
