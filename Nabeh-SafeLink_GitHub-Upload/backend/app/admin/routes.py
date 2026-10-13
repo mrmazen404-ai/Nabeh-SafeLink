@@ -45,12 +45,17 @@ class InviteRequest(BaseModel):
     role: Literal["SUPERVISOR", "ADMIN", "SUPER_ADMIN"] = "SUPERVISOR"
 
 
+class UserStatusRequest(BaseModel):
+    status: Literal["ACTIVE", "SUSPENDED"]
+    reason: str = Field(min_length=3, max_length=500)
+
+
 def _admin_by_email(email: str) -> dict | None:
     result = supabase.table("admin_users").select("*").eq("email", str(email).strip().lower()).limit(1).execute()
     return result.data[0] if result.data else None
 
 
-def _audit(admin_id: str | None, action: str, resource_type: str, resource_id: str | None, request: Request, before=None, after=None):
+def _audit(admin_id: str | None, action: str, resource_type: str, resource_id: str | None, request: Request, before=None, after=None, target_user_id: str | None = None, target_scan_id: str | None = None):
     request_id = request.headers.get("x-request-id")
     try:
         UUID(request_id) if request_id else None
@@ -61,6 +66,8 @@ def _audit(admin_id: str | None, action: str, resource_type: str, resource_id: s
         "action": action,
         "resource_type": resource_type,
         "resource_id": resource_id,
+        "target_user_id": target_user_id,
+        "target_scan_id": target_scan_id,
         "before_data": before or {},
         "after_data": after or {},
         "metadata_masked": {},
@@ -338,6 +345,76 @@ def dashboard_overview(
         return {"success": True, "data": data}
     except Exception:
         raise HTTPException(status_code=503, detail="تعذر تحميل مؤشرات Dashboard من قاعدة البيانات") from None
+
+
+@router.get("/users")
+def users(
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    search: str | None = Query(None, max_length=120),
+    status: Literal["ACTIVE", "SUSPENDED", "DELETED"] | None = Query(None),
+    admin: dict = Depends(require_permissions("users.read")),
+):
+    del admin
+    query = supabase.table("custom_users").select(
+        "id,email,display_name,role,status,email_verified,preferred_language,last_login_at,created_at,updated_at",
+        count="exact",
+    )
+    if search:
+        safe_search = search.strip().replace("%", "").replace("_", "").replace(",", "")
+        if safe_search:
+            query = query.or_(f"email.ilike.%{safe_search}%,display_name.ilike.%{safe_search}%")
+    if status:
+        query = query.eq("status", status)
+    result = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+    return {"success": True, "data": result.data or [], "meta": {"limit": limit, "offset": offset, "total": int(result.count or 0)}}
+
+
+@router.get("/users/{user_id}")
+def user_details(user_id: UUID, admin: dict = Depends(require_permissions("users.read"))):
+    del admin
+    result = supabase.table("custom_users").select(
+        "id,email,display_name,role,status,email_verified,preferred_language,last_login_at,created_at,updated_at"
+    ).eq("id", str(user_id)).limit(1).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    user = result.data[0]
+    try:
+        user["scan_count"] = _count("scans", [("eq", "user_id", str(user_id))])
+        user["feedback_count"] = _count("feedback", [("eq", "user_id", str(user_id))])
+    except Exception:
+        raise HTTPException(status_code=503, detail="تعذر تحميل إحصاءات المستخدم") from None
+    return {"success": True, "data": user}
+
+
+@router.patch("/users/{user_id}/status")
+def update_user_status(
+    user_id: UUID,
+    request: UserStatusRequest,
+    http_request: Request,
+    admin: dict = Depends(require_permissions("users.manage")),
+):
+    result = supabase.table("custom_users").select("id,status,email,display_name").eq("id", str(user_id)).limit(1).execute()
+    user = result.data[0] if result.data else None
+    if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    if user["status"] == "DELETED":
+        raise HTTPException(status_code=409, detail="لا يمكن تغيير حالة مستخدم محذوف")
+    if user["status"] == request.status:
+        return {"success": True, "data": user, "changed": False}
+    updated = supabase.table("custom_users").update({"status": request.status}).eq("id", str(user_id)).execute()
+    data = (updated.data or [None])[0] or {**user, "status": request.status}
+    _audit(
+        str(admin["id"]),
+        "ADMIN_USER_STATUS_CHANGED",
+        "custom_user",
+        str(user_id),
+        http_request,
+        before={"status": user["status"]},
+        after={"status": request.status, "reason": request.reason},
+        target_user_id=str(user_id),
+    )
+    return {"success": True, "data": data, "changed": True}
 
 
 @router.get("/sessions")
