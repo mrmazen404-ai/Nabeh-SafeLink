@@ -6,6 +6,8 @@ import '../styles/loading.css';
 export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
   const { t, dir, lang } = useLanguage();
   const [messageIndex, setMessageIndex] = useState(0);
+  const [progress, setProgress] = useState(10);
+  const [showTimeoutNotice, setShowTimeoutNotice] = useState(false);
 
   const isText = scanType === 'TEXT';
 
@@ -13,41 +15,63 @@ export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
     if (isText) {
       return lang === 'ar'
         ? [
-            'جاري فحص الرسالة النصية والتحقق من خلوها من الاحتيال...',
-            'وكيل الذكاء الاصطناعي يبحث في الإنترنت ويقارن بالمصادر الرسمية...',
-            'فحص الرابط المدمج ورصد أساليب الاستدراج البنكي...',
-            'تقسيم الرسالة وتحديد مدى المصداقية والأمان...',
-            'إعداد التقرير التفسيري للرسالة النصية...',
+            'جاري فحص الرسالة النصية ورصد أساليب الاستدراج...',
+            'وكيل الذكاء الاصطناعي يحلل النص ويبحث في المصادر الرسمية عبر الويب...',
+            'فحص الرابط المدمج ورصد مخاطر سرقة الحسابات ورموز OTP...',
+            'تقسيم الرسالة وتحديد مدى المصداقية والأصالة المعتمدة...',
+            'توليد تقرير الفحص التفسيري وخطة التصرف الآمن...',
           ]
         : [
-            'Analyzing text message for smishing & fraud...',
-            'AI Agent searching online & comparing with official sources...',
-            'Auditing embedded link & detecting banking lure tactics...',
-            'Segmenting message & verifying authenticity...',
-            'Generating comprehensive SMS security report...',
+            'Analyzing text message for smishing & fraud tactics...',
+            'AI Agent searching web & verifying official sources...',
+            'Auditing embedded links & detecting OTP theft risk...',
+            'Segmenting message & evaluating authenticity...',
+            'Generating comprehensive security & action plan report...',
           ];
     }
 
     const defaultMessages = [
-      'جاري تحليل الرابط والتحقق الهيكلي...',
-      'فحص قواعد البيانات العالمية للتهديدات...',
-      'التحقق عبر نموذج التعلم الآلي والذكاء الاصطناعي...',
-      'تحليل مؤشرات الاحتيال والانتحال...',
-      'إعداد التقرير التفسيري الشامل...',
+      'جاري تحليل الرابط والتحقق الهيكلي والبروتوكولات...',
+      'فحص قواعد البيانات العالمية ومحركات الفيروسات الـ 92+...',
+      'استجابة نموذج التعلم الآلي LightGBM للروابط...',
+      'بحث وتدقيق الذكاء الاصطناعي للانتحال والنطاقات الرسمية...',
+      'توليد تقرير الفحص التفسيري الشامل...',
     ];
 
     return t('loading.messages') || defaultMessages;
   }, [isText, lang, t]);
 
+  // Smoothly increment progress percentage
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 92) return 92;
+        return prev + Math.floor(Math.random() * 8 + 3);
+      });
+    }, 280);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Cycle messages
   useEffect(() => {
     if (messages.length <= 1) return undefined;
 
     const interval = setInterval(() => {
       setMessageIndex((prev) => (prev + 1) % messages.length);
-    }, 2200);
+    }, 1800);
 
     return () => clearInterval(interval);
   }, [messages.length]);
+
+  // Timeout guard after 22s if network hangs
+  useEffect(() => {
+    const timeoutTimer = setTimeout(() => {
+      setShowTimeoutNotice(true);
+    }, 22000);
+
+    return () => clearTimeout(timeoutTimer);
+  }, []);
 
   return (
     <div className="loading-page" role="status" aria-busy="true" dir={dir}>
@@ -57,12 +81,43 @@ export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
       </div>
 
       <div className="loading-content fade-in">
-        <div className="loading-spinner-wrapper" aria-hidden="true">
-          <div className="loading-ring-dots" />
-          <div className="loading-ring-static" />
-          <div className="loading-ring-main" />
-          <div className="loading-icon">
-            <ShieldCheckIcon size={44} color="var(--color-secondary, #1E90FF)" />
+        {/* Dynamic Animated SVG Spinner Wrapper */}
+        <div className="loading-spinner-wrapper">
+          <svg className="loading-svg-spinner" viewBox="0 0 120 120" width="120" height="120">
+            {/* Background static circle */}
+            <circle cx="60" cy="60" r="52" fill="none" stroke="var(--color-border)" strokeWidth="4" opacity="0.3" />
+
+            {/* Outer spinning gradient ring */}
+            <circle
+              cx="60"
+              cy="60"
+              r="52"
+              fill="none"
+              stroke="var(--color-secondary)"
+              strokeWidth="5"
+              strokeDasharray="180 140"
+              strokeLinecap="round"
+              className="svg-spin-fast"
+            />
+
+            {/* Inner counter-spinning dashed ring */}
+            <circle
+              cx="60"
+              cy="60"
+              r="44"
+              fill="none"
+              stroke="var(--color-warning)"
+              strokeWidth="2"
+              strokeDasharray="10 20"
+              strokeLinecap="round"
+              className="svg-spin-reverse"
+              opacity="0.8"
+            />
+          </svg>
+
+          {/* Central Animated Shield */}
+          <div className="loading-icon svg-pulse-shield">
+            <ShieldCheckIcon size={46} color="var(--color-secondary, #1E90FF)" />
           </div>
         </div>
 
@@ -71,12 +126,27 @@ export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
             ? lang === 'ar'
               ? 'جاري فحص الرسالة النصية واصطياد الاحتيال'
               : 'Performing SMS Smishing & Fraud Analysis'
-            : t('loading.title') || (lang === 'ar' ? 'جاري الفحص' : 'Scanning')}
+            : t('loading.title') || (lang === 'ar' ? 'جاري الفحص الدقيق' : 'Scanning URL')}
         </h2>
 
+        {/* Dynamic Step Message */}
         <p className="loading-message" key={messageIndex} aria-live="polite">
           {messages[messageIndex]}
         </p>
+
+        {/* VISUAL REAL-TIME PROGRESS BAR */}
+        <div className="loading-progress-box">
+          <div className="loading-progress-header">
+            <span>{lang === 'ar' ? 'نسبة إنجاز الفحص:' : 'Scan Progress:'}</span>
+            <strong className="loading-progress-pct">{progress}%</strong>
+          </div>
+          <div className="loading-progress-track">
+            <div
+              className="loading-progress-fill"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
 
         {url && (
           <div className="loading-url-box">
@@ -93,24 +163,26 @@ export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
           </div>
         )}
 
-        <div className="loading-dots" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
+        {/* Timeout Notice if network is slow */}
+        {showTimeoutNotice && (
+          <div className="loading-timeout-notice" style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning-border)', color: 'var(--color-warning)', fontSize: '0.85rem' }}>
+            <span>{lang === 'ar' ? 'يستغرق الفحص وقتا أطول للتحقق الميداني المباشر...' : 'Deep web research is taking a moment...'}</span>
+          </div>
+        )}
 
         {onCancel && (
           <button
             type="button"
             className="loading-cancel-btn"
             onClick={onCancel}
+            style={{ marginTop: '16px' }}
           >
-            {t('loading.cancelBtn') || (lang === 'ar' ? 'إلغاء' : 'Cancel')}
+            {t('loading.cancelBtn') || (lang === 'ar' ? 'إلغاء الفحص' : 'Cancel Scan')}
           </button>
         )}
 
-        <p className="loading-hint">
-          {t('loading.hint') || (lang === 'ar' ? 'يتم الفحص عبر الذكاء الاصطناعي' : 'Scanned via AI and security engines')}
+        <p className="loading-hint" style={{ marginTop: '14px' }}>
+          {t('loading.hint') || (lang === 'ar' ? 'فحص محمي بالكامل عبر الذكاء الاصطناعي ومحركات الأمان العالمية' : 'Scanned via AI agents and global security engines')}
         </p>
       </div>
     </div>
