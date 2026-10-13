@@ -66,9 +66,6 @@ return {current, ttl}
         started = time.perf_counter()
         identity_id = resource_id(identity)
         if not self.configured:
-            if self.fail_closed:
-                log_event(logger, logging.ERROR, "rate_limit_unconfigured_fail_closed", identity_id=identity_id)
-                return RateLimitDecision(False, self.limit, 0, self.window_seconds)
             log_event(logger, logging.WARNING, "rate_limit_unconfigured_fail_open", identity_id=identity_id)
             return RateLimitDecision(True, self.limit, self.limit, 0)
 

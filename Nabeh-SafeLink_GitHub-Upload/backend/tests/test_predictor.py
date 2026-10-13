@@ -1,4 +1,5 @@
 import json
+import os
 
 from app.ml.predictor import extract_features, predict_url
 
@@ -11,7 +12,10 @@ def test_invalid_url_is_unknown_not_dangerous():
 
 
 def test_feature_contract_matches_retrained_report():
-    with open("backend/app/ml/nabeh_model_retrained_report.json", encoding="utf-8") as handle:
+    report_path = os.path.join(os.path.dirname(__file__), "../app/ml/nabeh_model_retrained_report.json")
+    if not os.path.exists(report_path):
+        report_path = "backend/app/ml/nabeh_model_retrained_report.json"
+    with open(report_path, encoding="utf-8") as handle:
         report = json.load(handle)
     actual = list(extract_features("https://example.com/login?verify=1"))
     assert len(actual) == 42
