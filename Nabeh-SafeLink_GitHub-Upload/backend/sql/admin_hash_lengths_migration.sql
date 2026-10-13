@@ -12,6 +12,7 @@
       64 characters after trimming. This prevents silently accepting data that
       may already have been truncated by character(1).
     - Safe to run again after a successful run.
+    - Enables RLS on every Admin table and removes direct anon/authenticated access.
 
   Run in Supabase SQL Editor after reviewing the verification output.
 */
@@ -131,6 +132,37 @@ begin
 end
 $$;
 
+/*
+  Lock down all Admin tables.
+  There are intentionally no anon/authenticated policies: the Admin Backend
+  is the only access path and uses the server-side service_role key.
+*/
+do $$
+declare
+  table_name text;
+begin
+  foreach table_name in array array[
+    'admin_users',
+    'admin_sessions',
+    'admin_2fa_methods',
+    'admin_2fa_recovery_codes',
+    'admin_login_attempts',
+    'admin_invitations',
+    'admin_audit_logs',
+    'admin_notifications'
+  ]
+  loop
+    if to_regclass('public.' || table_name) is null then
+      raise exception 'Admin RLS hardening aborted; missing table: public.%', table_name;
+    end if;
+
+    execute format('alter table public.%I enable row level security', table_name);
+    execute format('revoke all on table public.%I from anon, authenticated', table_name);
+    execute format('grant all on table public.%I to service_role', table_name);
+  end loop;
+end
+$$;
+
 commit;
 
 /* Post-migration verification. */
@@ -158,3 +190,21 @@ where table_schema = 'public'
     'token_hash'
   )
 order by table_name, column_name;
+
+select
+  tablename,
+  rowsecurity,
+  forcerowsecurity
+from pg_tables
+where schemaname = 'public'
+  and tablename in (
+    'admin_users',
+    'admin_sessions',
+    'admin_2fa_methods',
+    'admin_2fa_recovery_codes',
+    'admin_login_attempts',
+    'admin_invitations',
+    'admin_audit_logs',
+    'admin_notifications'
+  )
+order by tablename;
