@@ -13,6 +13,8 @@ venv/
 # Frontend dependencies and local build cache
 frontend/node_modules/
 frontend/dist/
+admin_frontend/node_modules/
+admin_frontend/dist/
 
 # Generated deployment bundle; regenerate it during release packaging
 backend_bundle.zip
