@@ -24,13 +24,18 @@ export function AuthProvider({ children }) {
   const loading = status === 'checking' || status === 'logging_in' || status === 'logging_out';
   const isGuest = status === 'guest' || status === 'error' || !user || !token;
 
-  const checkAuth = useCallback(async (candidateToken = getAccessToken()) => {
+  const checkAuth = useCallback(async (candidateToken = getAccessToken(), force = false) => {
     if (!candidateToken) {
       clearLocalSession(setUser, setToken, setStatus);
       return null;
     }
 
-    setStatus('checking');
+    // Deduplicate / Cache: If user is already authenticated with the same token, avoid duplicate network calls.
+    if (!force && user && token === candidateToken && status === 'authenticated') {
+      return user;
+    }
+
+    setStatus((prev) => (prev === 'authenticated' ? prev : 'checking'));
     try {
       const res = await api.get('/auth/me', {
         headers: { Authorization: `Bearer ${candidateToken}` },
@@ -49,8 +54,9 @@ export function AuthProvider({ children }) {
       setStatus('guest');
       throw error;
     }
-  }, []);
+  }, [user, token, status]);
 
+  // Initial check on app startup (runs only once)
   useEffect(() => {
     const currentToken = getAccessToken();
     if (!currentToken) {
@@ -58,10 +64,11 @@ export function AuthProvider({ children }) {
       return undefined;
     }
     checkAuth(currentToken).catch(() => {
-      // checkAuth has already cleared the invalid session and settled the state.
+      // checkAuth clears local session on failure
     });
     return undefined;
-  }, [checkAuth]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const handleAuthExpired = () => clearLocalSession(setUser, setToken, setStatus);
@@ -77,7 +84,7 @@ export function AuthProvider({ children }) {
       if (!res.data?.success || !accessToken) throw new Error('فشل تسجيل الدخول');
       setAccessToken(accessToken);
       setToken(accessToken);
-      await checkAuth(accessToken);
+      await checkAuth(accessToken, true);
       setIsSecuringSession(true);
       return res.data;
     } catch (error) {
@@ -118,7 +125,7 @@ export function AuthProvider({ children }) {
     if (res.data?.success && accessToken && type === 'signup') {
       setAccessToken(accessToken);
       setToken(accessToken);
-      await checkAuth(accessToken);
+      await checkAuth(accessToken, true);
       setIsSecuringSession(true);
     } else if (res.data?.success && accessToken && type === 'recovery') {
       sessionStorage.setItem('nabeh_recovery_token', accessToken);
@@ -129,8 +136,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     setStatus('logging_out');
     try {
-      // Tokens are stateless and the API intentionally has no /auth/logout
-      // endpoint. Clearing sessionStorage is the complete local logout.
+      // Tokens are stateless and the API intentionally has no /auth/logout endpoint
     } finally {
       clearLocalSession(setUser, setToken, setStatus);
     }
