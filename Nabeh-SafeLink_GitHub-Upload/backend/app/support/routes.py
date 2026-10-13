@@ -92,10 +92,6 @@ async def create_support_request(
         }
     except Exception as error:
         logger.warning("support_request_persistence_fallback ticket_id=%s error=%s", ticket_id, type(error).__name__)
-        # Return ticket_id so user request is gracefully accepted even if table requires migration
-        return {
-            "success": True,
-            "ticket_id": ticket_id,
-            "message": "تم استلام رسالتك بنجاح",
-            "data": None,
-        }
+        # Do not report success when the ticket was not persisted. Returning
+        # 200 here creates a false support record and prevents safe retries.
+        raise HTTPException(status_code=503, detail="تعذر حفظ طلب الدعم حاليًا. حاول لاحقًا.") from None

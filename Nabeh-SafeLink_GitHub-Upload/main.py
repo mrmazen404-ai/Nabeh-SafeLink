@@ -34,6 +34,10 @@ FRONTEND_INDEX = FRONTEND_DIST / "index.html"
 
 @app.get("/{full_path:path}", include_in_schema=False)
 async def frontend_fallback(full_path: str):
+    # Unknown API paths must remain API 404s; they must not receive index.html.
+    # The same rule prevents the SPA fallback from masking health/docs routes.
+    if full_path == "health" or full_path == "openapi.json" or full_path.startswith(("api/", "docs", "redoc")):
+        return JSONResponse({"detail": "Not found"}, status_code=404)
     if not FRONTEND_INDEX.is_file():
         return JSONResponse({"detail": "Frontend build is unavailable"}, status_code=404)
 

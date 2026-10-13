@@ -154,7 +154,8 @@ export default function Dashboard({ activeTab, setActiveTab, onNavigateAuth }) {
     };
   }, [refreshLive, t]);
 
-  const stats = overview?.stats || EMPTY_STATS;
+  // FastAPI returns the overview counters under `statistics`.
+  const stats = overview?.statistics || EMPTY_STATS;
   const permissions = overview?.permissions || {};
   const permissionItems = Object.entries(permissions);
   const displayName = profile?.display_name || user?.display_name || user?.email?.split('@')[0] || (lang === 'ar' ? 'المستخدم' : 'User');

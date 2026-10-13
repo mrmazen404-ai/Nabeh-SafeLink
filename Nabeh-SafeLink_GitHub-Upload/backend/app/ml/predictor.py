@@ -216,12 +216,41 @@ def extract_features(raw_url: str) -> dict:
 
 
 def predict_url(url: str) -> dict:
+    raw_value = str(url or "").strip()
+    if not raw_value:
+        return {
+            "classification": "UNKNOWN",
+            "confidence": 0.5,
+            "source": "EMPTY_INPUT",
+        }
+    # Do not silently delete whitespace or reinterpret arbitrary text as a
+    # hostname. Invalid/non-web schemes must remain UNKNOWN, not DANGEROUS.
+    if re.search(r"\s", raw_value):
+        return {
+            "classification": "UNKNOWN",
+            "confidence": 0.5,
+            "source": "INVALID_URL",
+        }
+    explicit_scheme = re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", raw_value)
+    if explicit_scheme and not raw_value.lower().startswith(("http://", "https://")):
+        return {
+            "classification": "UNKNOWN",
+            "confidence": 0.5,
+            "source": "INVALID_URL",
+        }
+
     url_norm, parsed, host, port = parse_url(url)
     if not url_norm:
         return {
             "classification": "UNKNOWN",
             "confidence": 0.5,
             "source": "EMPTY_INPUT",
+        }
+    if parsed is None or not host or parsed.scheme.lower() not in {"http", "https"}:
+        return {
+            "classification": "UNKNOWN",
+            "confidence": 0.5,
+            "source": "INVALID_URL",
         }
 
     ext = _TLD_EXTRACTOR(host)

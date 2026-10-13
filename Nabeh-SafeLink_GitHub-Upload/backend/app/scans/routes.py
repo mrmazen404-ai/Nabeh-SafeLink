@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
@@ -107,6 +108,62 @@ async def get_scans(
     return {"success": True, "data": scans}
 
 
+@router.post("/{scan_id}/hide")
+async def hide_scan(
+    scan_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    user_id = await get_required_user_id(authorization)
+    try:
+        owned = supabase.table("scans").select("id").eq("id", scan_id).eq("user_id", user_id).is_("user_deleted_at", "null").limit(1).execute()
+        if not owned.data:
+            raise HTTPException(status_code=404, detail="الفحص غير موجود أو لا تملك صلاحية الوصول إليه")
+        result = supabase.table("scans").update({"user_hidden_at": datetime.now(timezone.utc).isoformat()}).eq("id", scan_id).eq("user_id", user_id).execute()
+        return {"success": True, "data": (result.data or [{"id": scan_id, "user_hidden_at": True}])[0]}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="تعذر إخفاء الفحص") from None
+
+
+@router.post("/{scan_id}/unhide")
+async def unhide_scan(
+    scan_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    user_id = await get_required_user_id(authorization)
+    try:
+        owned = supabase.table("scans").select("id").eq("id", scan_id).eq("user_id", user_id).is_("user_deleted_at", "null").limit(1).execute()
+        if not owned.data:
+            raise HTTPException(status_code=404, detail="الفحص غير موجود أو لا تملك صلاحية الوصول إليه")
+        result = supabase.table("scans").update({"user_hidden_at": None}).eq("id", scan_id).eq("user_id", user_id).execute()
+        return {"success": True, "data": (result.data or [{"id": scan_id, "user_hidden_at": None}])[0]}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="تعذر إظهار الفحص") from None
+
+
+@router.delete("/{scan_id}")
+async def delete_scan(
+    scan_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    """User deletion is privacy-preserving soft deletion, not a destructive DB delete."""
+    user_id = await get_required_user_id(authorization)
+    try:
+        owned = supabase.table("scans").select("id").eq("id", scan_id).eq("user_id", user_id).is_("user_deleted_at", "null").limit(1).execute()
+        if not owned.data:
+            raise HTTPException(status_code=404, detail="الفحص غير موجود أو لا تملك صلاحية الوصول إليه")
+        now = datetime.now(timezone.utc).isoformat()
+        result = supabase.table("scans").update({"user_deleted_at": now, "user_hidden_at": now, "input_value_masked": None}).eq("id", scan_id).eq("user_id", user_id).execute()
+        return {"success": True, "message": "تم حذف بيانات الفحص من سجلك", "data": (result.data or [{"id": scan_id, "user_deleted_at": now}])[0]}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="تعذر حذف بيانات الفحص") from None
+
+
 @router.get("/compare")
 async def compare_scans(
     response: Response,
@@ -120,7 +177,7 @@ async def compare_scans(
     try:
         result = supabase.table("scans").select(
             "id,input_type,input_value_masked,status,classification,confidence_score,confidence_level,recommendation,created_at,completed_at"
-        ).eq("user_id", user_id).in_("id", scan_ids).order("created_at", desc=False).execute()
+        ).eq("user_id", user_id).is_("user_hidden_at", "null").is_("user_deleted_at", "null").in_("id", scan_ids).order("created_at", desc=False).execute()
     except Exception:
         raise HTTPException(status_code=503, detail="تعذر تحميل بيانات المقارنة") from None
     if len(result.data or []) < 2:
@@ -140,11 +197,11 @@ async def get_scan_details(
         try:
             result = supabase.table("scans").select(
                 "id,user_id,input_type,input_value_masked,status,classification,confidence_score,confidence_level,recommendation,analysis_snapshot,created_at,completed_at"
-            ).eq("id", scan_id).eq("user_id", user_id).limit(1).execute()
+            ).eq("id", scan_id).eq("user_id", user_id).is_("user_hidden_at", "null").is_("user_deleted_at", "null").limit(1).execute()
         except Exception:
             result = supabase.table("scans").select(
                 "id,user_id,input_type,input_value_masked,status,classification,confidence_score,confidence_level,recommendation,created_at,completed_at"
-            ).eq("id", scan_id).eq("user_id", user_id).limit(1).execute()
+            ).eq("id", scan_id).eq("user_id", user_id).is_("user_hidden_at", "null").is_("user_deleted_at", "null").limit(1).execute()
         if not result.data:
             raise HTTPException(status_code=404, detail="الفحص غير موجود أو لا تملك صلاحية الوصول إليه")
         explanation = supabase.table("scan_explanations").select(

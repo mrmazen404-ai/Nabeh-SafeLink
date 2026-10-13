@@ -128,7 +128,7 @@ def client_identity(request: Request) -> str:
 _guest_limiter = UpstashRateLimiter(
     limit=int(os.getenv("NABEH_GUEST_RATE_LIMIT", "10")),
     window_seconds=int(os.getenv("NABEH_GUEST_RATE_WINDOW_SECONDS", "60")),
-    fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "false").lower() in {"1", "true", "yes"},
+    fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true").lower() in {"1", "true", "yes"},
 )
 
 

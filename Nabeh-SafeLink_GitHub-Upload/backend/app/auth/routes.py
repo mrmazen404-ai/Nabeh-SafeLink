@@ -215,7 +215,7 @@ async def register(request: RegisterRequest):
 _login_limiter = UpstashRateLimiter(
     limit=10,
     window_seconds=900,
-    fail_closed=os.getenv("NABEH_LOGIN_RATE_LIMIT_FAIL_CLOSED", "false").lower() in {"1", "true", "yes"},
+    fail_closed=os.getenv("NABEH_LOGIN_RATE_LIMIT_FAIL_CLOSED", os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true")).lower() in {"1", "true", "yes"},
 )
 
 
@@ -260,12 +260,12 @@ async def forgot_password(request: ForgotPasswordRequest):
 _resend_limiter = UpstashRateLimiter(
     limit=5,
     window_seconds=3600,
-    fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "false").lower() in {"1", "true", "yes"},
+    fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true").lower() in {"1", "true", "yes"},
 )
 _resend_cooldown_limiter = UpstashRateLimiter(
     limit=1,
     window_seconds=60,
-    fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "false").lower() in {"1", "true", "yes"},
+    fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true").lower() in {"1", "true", "yes"},
 )
 
 

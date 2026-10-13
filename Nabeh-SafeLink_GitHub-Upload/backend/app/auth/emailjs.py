@@ -78,8 +78,9 @@ def send_otp_via_emailjs(to_email: str, otp_code: str, action_type: str = "signu
             error_code = "email_provider_authentication_failed"
         else:
             error_code = "email_provider_rejected_request"
-        raw_detail = (response.text or "").replace("\n", " ").strip()[:240]
-        log_event(logger, logging.ERROR, "emailjs_send_failed", action=action_type, recipient=recipient, status=response.status_code, provider_detail=raw_detail or "empty", duration_ms=elapsed_ms(started))
+        # Provider bodies may contain request identifiers, PII, or credentials;
+        # expose only the status code in application logs.
+        log_event(logger, logging.ERROR, "emailjs_send_failed", action=action_type, recipient=recipient, status=response.status_code, duration_ms=elapsed_ms(started))
         return {"success": False, "error": error_code}
     except requests.RequestException as error:
         log_event(logger, logging.ERROR, "emailjs_connection_failed", action=action_type, recipient=recipient, error_type=safe_error(error), duration_ms=elapsed_ms(started))

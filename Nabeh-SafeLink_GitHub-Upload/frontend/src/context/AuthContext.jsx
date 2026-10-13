@@ -63,6 +63,12 @@ export function AuthProvider({ children }) {
     return undefined;
   }, [checkAuth]);
 
+  useEffect(() => {
+    const handleAuthExpired = () => clearLocalSession(setUser, setToken, setStatus);
+    window.addEventListener('nabeh:auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('nabeh:auth-expired', handleAuthExpired);
+  }, []);
+
   const login = useCallback(async (email, password) => {
     setStatus('logging_in');
     try {
@@ -123,11 +129,8 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     setStatus('logging_out');
     try {
-      // The backend may not expose a logout endpoint because access tokens are
-      // stateless. A failed remote request must never block local logout.
-      await api.post('/auth/logout');
-    } catch {
-      // Local cleanup is still mandatory.
+      // Tokens are stateless and the API intentionally has no /auth/logout
+      // endpoint. Clearing sessionStorage is the complete local logout.
     } finally {
       clearLocalSession(setUser, setToken, setStatus);
     }

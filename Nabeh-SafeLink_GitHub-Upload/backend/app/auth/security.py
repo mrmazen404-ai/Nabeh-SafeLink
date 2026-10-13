@@ -115,6 +115,6 @@ def get_authenticated_user(token: str) -> dict[str, Any]:
 def get_reset_user(token: str) -> dict[str, Any]:
     claims = decode_token(token, "password_reset")
     user = get_user_by_id(str(claims["sub"]))
-    if not user or not user.get("email_verified"):
+    if not user or not user.get("email_verified") or user.get("status", "ACTIVE") != "ACTIVE":
         raise AuthSecurityError("invalid reset token")
     return user

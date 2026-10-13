@@ -28,6 +28,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nabeh:auth-expired'));
+    }
+    return Promise.reject(error);
+  },
+);
+
 export const scanURL = async (inputValue, language = 'ar', isGuest = true, inputType = 'URL') => {
   const endpoint = isGuest ? '/scans/guest' : '/scans/';
   const response = await api.post(endpoint, {
@@ -68,5 +78,19 @@ export const submitSupportRequest = async ({ requestType, email, subject, scanId
   });
   return response.data;
 };
+
+export const getLegalDocument = async (type, language = 'ar') => {
+  const response = await api.get(`/legal/${type}?language=${encodeURIComponent(language)}`);
+  return response.data;
+};
+
+export const hideScan = async (scanId) => (await api.post(`/scans/${encodeURIComponent(scanId)}/hide`)).data;
+export const unhideScan = async (scanId) => (await api.post(`/scans/${encodeURIComponent(scanId)}/unhide`)).data;
+export const deleteScan = async (scanId) => (await api.delete(`/scans/${encodeURIComponent(scanId)}`)).data;
+export const exportUserData = async () => (await api.get('/dashboard/privacy/export')).data;
+export const getDeletionRequest = async () => (await api.get('/dashboard/account/deletion-request')).data;
+export const requestAccountDeletion = async (reason) => (await api.post('/dashboard/account/deletion-request', { reason })).data;
+export const cancelAccountDeletion = async () => (await api.post('/dashboard/account/deletion-request/cancel')).data;
+export const deleteAccount = async (current_password, confirmation) => (await api.delete('/dashboard/account', { data: { current_password, confirmation } })).data;
 
 export default api;

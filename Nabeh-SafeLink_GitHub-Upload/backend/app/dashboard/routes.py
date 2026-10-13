@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
@@ -55,6 +56,15 @@ class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=12, max_length=128)
     confirm_password: str = Field(min_length=12, max_length=128)
+
+
+class AccountDeletionRequest(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=1000)
+
+
+class AccountDeletionConfirmation(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    confirmation: Literal["DELETE MY ACCOUNT"]
 
 
 @router.websocket("/ws")
@@ -370,6 +380,9 @@ async def update_privacy_consent(payload: ConsentUpdate, response: Response, aut
 @router.post("/feedback")
 async def create_feedback(payload: FeedbackCreate, response: Response, authorization: Optional[str] = Header(None)):
     user = _require_user(authorization)
+    owned_scan = supabase.table("scans").select("id").eq("id", payload.scan_id).eq("user_id", str(user["id"])).limit(1).execute()
+    if not owned_scan.data:
+        raise HTTPException(status_code=404, detail="الفحص غير موجود أو لا تملك صلاحية الوصول إليه")
     row = {"scan_id": payload.scan_id, "user_id": str(user["id"]), "reported_classification": payload.reported_classification, "comment": payload.comment}
     result = supabase.table("feedback").insert(row).execute()
     log_event(logger, logging.INFO, "feedback_created")
@@ -383,3 +396,111 @@ async def create_support_request(payload: SupportCreate, response: Response, aut
     result = supabase.table("support_requests").insert(row).execute()
     log_event(logger, logging.INFO, "support_request_created")
     return {"success": True, "data": (result.data or [row])[0]}
+
+
+@router.get("/privacy/export")
+async def export_user_data(response: Response, authorization: Optional[str] = Header(None)):
+    """Return the user's exportable data without raw secrets or unmasked inputs."""
+    user = _require_user(authorization)
+    user_id = str(user["id"])
+    try:
+        profile = supabase.table("user_profiles").select(
+            "user_id,display_name,preferred_language,timezone,avatar_path,created_at,updated_at"
+        ).eq("user_id", user_id).limit(1).execute()
+        consents = supabase.table("privacy_consents").select(
+            "consent_type,version,granted,granted_at,accepted_at,revoked_at"
+        ).eq("user_id", user_id).order("granted_at", desc=True).execute()
+        scans = supabase.table("scans").select(
+            "id,input_type,input_value_masked,status,classification,confidence_score,confidence_level,recommendation,created_at,completed_at"
+        ).eq("user_id", user_id).is_("user_deleted_at", "null").execute()
+        feedback = supabase.table("feedback").select(
+            "id,scan_id,reported_classification,comment,status,created_at"
+        ).eq("user_id", user_id).execute()
+        support = supabase.table("support_requests").select(
+            "id,subject,status,priority,created_at,resolved_at"
+        ).eq("user_id", user_id).execute()
+        return {
+            "success": True,
+            "data": {
+                "exported_at": _now(),
+                "account": _user_public(user, (profile.data or [None])[0]),
+                "profile": (profile.data or [None])[0],
+                "consents": consents.data or [],
+                "scans": scans.data or [],
+                "feedback": feedback.data or [],
+                "support_requests": support.data or [],
+            },
+        }
+    except Exception:
+        logger.exception("user_data_export_failed")
+        raise HTTPException(status_code=503, detail="تعذر تجهيز نسخة بياناتك حاليًا") from None
+
+
+@router.get("/account/deletion-request")
+async def get_account_deletion_request(response: Response, authorization: Optional[str] = Header(None)):
+    user = _require_user(authorization)
+    result = supabase.table("account_deletion_requests").select(
+        "id,status,reason,requested_at,confirmed_at,completed_at,cancelled_at"
+    ).eq("user_id", str(user["id"])).order("requested_at", desc=True).limit(1).execute()
+    return {"success": True, "data": (result.data or [None])[0]}
+
+
+@router.post("/account/deletion-request")
+async def create_account_deletion_request(payload: AccountDeletionRequest, response: Response, authorization: Optional[str] = Header(None)):
+    user = _require_user(authorization)
+    user_id = str(user["id"])
+    existing = supabase.table("account_deletion_requests").select("id,status").eq("user_id", user_id).in_("status", ["PENDING", "CONFIRMED", "PROCESSING"]).limit(1).execute()
+    if existing.data:
+        return {"success": True, "data": existing.data[0]}
+    row = {"user_id": user_id, "status": "PENDING", "reason": (payload.reason or "").strip() or None}
+    result = supabase.table("account_deletion_requests").insert(row).execute()
+    log_event(logger, logging.INFO, "account_deletion_requested")
+    return {"success": True, "data": (result.data or [row])[0]}
+
+
+@router.post("/account/deletion-request/cancel")
+async def cancel_account_deletion_request(response: Response, authorization: Optional[str] = Header(None)):
+    user = _require_user(authorization)
+    result = supabase.table("account_deletion_requests").update({"status": "CANCELLED", "cancelled_at": _now()}).eq("user_id", str(user["id"])).in_("status", ["PENDING", "CONFIRMED"]).execute()
+    return {"success": True, "data": (result.data or [None])[0]}
+
+
+@router.delete("/account")
+async def delete_account(payload: AccountDeletionConfirmation, response: Response, authorization: Optional[str] = Header(None)):
+    """Anonymize and disable the account after a password + phrase confirmation."""
+    user = _require_user(authorization)
+    user_id = str(user["id"])
+    if not verify_password(payload.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="كلمة المرور الحالية غير صحيحة")
+    deletion = supabase.table("account_deletion_requests").select("id,status").eq("user_id", user_id).in_("status", ["PENDING", "CONFIRMED"]).limit(1).execute()
+    if not deletion.data:
+        raise HTTPException(status_code=409, detail="أنشئ طلب حذف أولًا ثم أكد العملية")
+    deletion_id = deletion.data[0]["id"]
+    now = _now()
+    try:
+        scans = supabase.table("scans").select("id").eq("user_id", user_id).execute()
+        scan_ids = [row["id"] for row in (scans.data or []) if row.get("id")]
+        if scan_ids:
+            for table in ("scan_signals", "scan_explanations", "scan_fraud_types", "email_header_analyses"):
+                supabase.table(table).delete().in_("scan_id", scan_ids).execute()
+            supabase.table("scans").update({"user_id": None, "input_value_masked": None, "analysis_snapshot": None, "user_hidden_at": now, "user_deleted_at": now}).in_("id", scan_ids).execute()
+        supabase.table("feedback").delete().eq("user_id", user_id).execute()
+        supabase.table("notifications").delete().eq("user_id", user_id).execute()
+        supabase.table("notification_preferences").delete().eq("user_id", user_id).execute()
+        supabase.table("privacy_consents").delete().eq("user_id", user_id).execute()
+        supabase.table("custom_auth_otps").delete().eq("user_id", user_id).execute()
+        supabase.table("api_keys").delete().eq("user_id", user_id).execute()
+        supabase.table("integrations").delete().eq("user_id", user_id).execute()
+        supabase.table("uploaded_files").delete().eq("user_id", user_id).execute()
+        supabase.table("user_profiles").delete().eq("user_id", user_id).execute()
+        supabase.table("support_requests").update({"user_id": None, "email": None, "message": "تمت إزالة بيانات صاحب الحساب بناءً على طلب الحذف.", "status": "CLOSED", "resolved_at": now}).eq("user_id", user_id).execute()
+        supabase.table("audit_logs").update({"actor_user_id": None, "metadata_masked": {"event": "ACCOUNT_DELETED", "user_reference": "removed"}}).eq("actor_user_id", user_id).execute()
+        replacement_email = f"deleted-{secrets.token_hex(12)}@deleted.invalid"
+        supabase.table("custom_users").update({"email": replacement_email, "display_name": "Deleted user", "password_hash": hash_password(secrets.token_urlsafe(32)), "status": "DELETED", "email_verified": False, "updated_at": now}).eq("id", user_id).execute()
+        supabase.table("account_deletion_requests").update({"status": "COMPLETED", "confirmed_at": now, "completed_at": now}).eq("id", deletion_id).execute()
+        log_event(logger, logging.INFO, "account_deletion_completed")
+        return {"success": True, "message": "تم حذف بيانات الحساب وتعطيله بنجاح"}
+    except Exception:
+        logger.exception("account_deletion_failed")
+        supabase.table("account_deletion_requests").update({"status": "FAILED", "failure_reason": "processing_error"}).eq("id", deletion_id).execute()
+        raise HTTPException(status_code=503, detail="تعذر إكمال حذف الحساب؛ قد تكون بعض البيانات عولجت جزئيًا. تواصل مع الدعم للتحقق") from None

@@ -67,16 +67,14 @@ export default function Contact({ activeTab, setActiveTab }) {
       if (response && response.success && response.ticket_id) {
         setSubmittedTicket(response.ticket_id);
       } else {
-        const fallbackTicket = 'TK-' + Math.floor(10000 + Math.random() * 90000);
-        setSubmittedTicket(fallbackTicket);
+        setErrorMessage('تعذر حفظ طلب الدعم حاليًا. حاول لاحقًا.');
       }
     } catch (err) {
       const serverDetail = err?.response?.data?.detail;
       if (err?.response?.status === 401) {
         setErrorMessage(serverDetail || 'جلسة التوثيق منتهية. يرجى تسجيل الدخول مجدداً.');
       } else {
-        const fallbackTicket = 'TK-' + Math.floor(10000 + Math.random() * 90000);
-        setSubmittedTicket(fallbackTicket);
+        setErrorMessage(serverDetail || 'تعذر حفظ طلب الدعم حاليًا. حاول لاحقًا.');
       }
     } finally {
       setIsSubmitting(false);

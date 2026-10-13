@@ -35,6 +35,8 @@ const About = lazy(() => import('./pages/About'));
 const Contact = lazy(() => import('./pages/Contact'));
 const Faq = lazy(() => import('./pages/Faq'));
 const UserGuide = lazy(() => import('./pages/UserGuide'));
+const LegalDocument = lazy(() => import('./pages/LegalDocument'));
+const DataPrivacy = lazy(() => import('./pages/DataPrivacy'));
 import ErrorPage from './components/ErrorPage';
 import BottomNav from './components/BottomNav';
 import './styles/theme.css';
@@ -202,6 +204,9 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
           <Route path="/guide" element={<RoutedPage component={UserGuide} />} />
           <Route path="/contact" element={<RoutedPage component={Contact} />} />
           <Route path="/about" element={<RoutedPage component={About} />} />
+          <Route path="/terms" element={<RoutedPage component={LegalDocument} type="terms" />} />
+          <Route path="/privacy" element={<RoutedPage component={LegalDocument} type="privacy" />} />
+          <Route path="/disclaimer" element={<RoutedPage component={LegalDocument} type="disclaimer" />} />
         </Route>
         <Route path="/welcome" element={<WelcomePage />} />
         <Route path="/onboarding" element={<OnboardingRoute />} />
@@ -221,6 +226,8 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
           <Route path="/dashboard" element={<RoutedPage component={Dashboard} />} />
           <Route path="/notifications" element={<RoutedPage component={Notifications} />} />
           <Route path="/settings/alerts" element={<RoutedPage component={AlertSettings} />} />
+          <Route path="/settings/privacy" element={<RoutedPage component={DataPrivacy} />} />
+          <Route path="/settings/account-data" element={<RoutedPage component={DataPrivacy} />} />
           {/* /home remains a backwards-compatible alias; Dashboard is the single workspace. */}
           <Route path="/home" element={<RoutedPage component={Dashboard} />} />
           <Route path="/history" element={<RoutedPage component={History} onQuickScan={rescan} />} />

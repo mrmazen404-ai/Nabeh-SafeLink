@@ -560,8 +560,10 @@ class ScanService:
         try:
             result = (
                 supabase.table("scans")
-                .select("id,input_type,input_value_masked,status,classification,confidence_score,confidence_level,created_at,completed_at")
+                .select("id,input_type,input_value_masked,status,classification,confidence_score,confidence_level,created_at,completed_at,user_hidden_at,user_deleted_at")
                 .eq("user_id", user_id)
+                .is_("user_hidden_at", "null")
+                .is_("user_deleted_at", "null")
                 .order("created_at", desc=True)
                 .limit(safe_limit)
                 .execute()

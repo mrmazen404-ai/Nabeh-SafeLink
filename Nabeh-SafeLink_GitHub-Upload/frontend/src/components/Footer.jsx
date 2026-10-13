@@ -38,6 +38,13 @@ export default function Footer({ activeTab, setActiveTab }) {
     { id: 'about', label: t('nav.about'), icon: InfoIcon },
   ];
 
+  const legalLinks = [
+    { id: 'terms', label: dir === 'rtl' ? 'شروط الاستخدام' : 'Terms of use', path: '/terms' },
+    { id: 'privacy', label: dir === 'rtl' ? 'سياسة الخصوصية' : 'Privacy policy', path: '/privacy' },
+    { id: 'disclaimer', label: dir === 'rtl' ? 'إخلاء المسؤولية' : 'Disclaimer', path: '/disclaimer' },
+    ...(isGuest ? [] : [{ id: 'data', label: dir === 'rtl' ? 'إدارة بياناتي' : 'My data controls', path: '/settings/privacy' }]),
+  ];
+
   const quickLinks = isGuest
     ? [
         { id: 'scan', label: t('nav.scan'), icon: ShieldIcon },
@@ -115,6 +122,19 @@ export default function Footer({ activeTab, setActiveTab }) {
                 </li>
               );
             })}
+          </ul>
+        </div>
+
+        <div className="footer-links-column">
+          <h3 className="footer-column-title">{dir === 'rtl' ? 'الحقوق والبيانات' : 'Legal & data'}</h3>
+          <ul className="footer-links-list">
+            {legalLinks.map((item) => (
+              <li key={item.id}>
+                <button type="button" className="footer-link-btn" onClick={() => navigate(item.path)}>
+                  <span>{item.label}</span>
+                </button>
+              </li>
+            ))}
           </ul>
         </div>
 

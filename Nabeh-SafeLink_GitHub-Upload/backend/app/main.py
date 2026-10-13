@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -16,6 +17,7 @@ from app.scans.routes import router as scans_router
 from app.statistics.routes import router as stats_router
 from app.dashboard.routes import router as dashboard_router
 from app.support.routes import router as support_router
+from app.legal.routes import router as legal_router
 from app.observability import configure_logging, elapsed_ms, install_request_id_filter, log_event, reset_request_id, set_request_id
 
 configure_logging()
@@ -55,7 +57,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.CORS_ALLOWED_ORIGINS),
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -64,11 +66,20 @@ app.include_router(scans_router, prefix="/api/v1/scans", tags=["Scans"])
 app.include_router(stats_router, prefix="/api/v1/statistics", tags=["Statistics"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(support_router, prefix="/api/v1/support", tags=["Support"])
+app.include_router(legal_router, prefix="/api/v1/legal", tags=["Legal"])
 
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
-    request_token = set_request_id(request.headers.get("x-request-id") or str(uuid4()))
+    supplied_request_id = (request.headers.get("x-request-id") or "").strip()
+    # Accept only a short, log-safe correlation value.  Invalid or multiline
+    # values are replaced rather than echoed into logs or response headers.
+    request_id_value = (
+        supplied_request_id
+        if len(supplied_request_id) <= 128 and re.fullmatch(r"[A-Za-z0-9._:-]+", supplied_request_id)
+        else str(uuid4())
+    )
+    request_token = set_request_id(request_id_value)
     started = time.perf_counter()
     log_event(logger, logging.INFO, "request_started", method=request.method, path=request.url.path)
     response = None
@@ -83,7 +94,13 @@ async def request_logging_middleware(request: Request, call_next):
             status=response.status_code,
             duration_ms=elapsed_ms(started),
         )
-        response.headers["X-Request-ID"] = request.headers.get("x-request-id") or request_id_for_header()
+        response.headers["X-Request-ID"] = request_id_value
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        if request.url.scheme == "https":
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return response
     except Exception as error:
         log_event(
