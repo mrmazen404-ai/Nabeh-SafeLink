@@ -48,5 +48,14 @@ async def frontend_fallback(full_path: str):
         return JSONResponse({"detail": "Not found"}, status_code=404)
 
     if requested.is_file():
-        return FileResponse(requested)
+        media_type = None
+        if requested.suffix == ".css":
+            media_type = "text/css"
+        elif requested.suffix == ".js":
+            media_type = "application/javascript"
+        elif requested.suffix == ".svg":
+            media_type = "image/svg+xml"
+        elif requested.suffix == ".json":
+            media_type = "application/json"
+        return FileResponse(requested, media_type=media_type)
     return FileResponse(FRONTEND_INDEX)
