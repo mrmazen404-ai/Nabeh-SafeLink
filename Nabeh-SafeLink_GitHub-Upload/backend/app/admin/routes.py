@@ -280,7 +280,10 @@ def me(admin: dict = Depends(current_admin)):
 def _count(table_name: str, filters: list[tuple[str, str, object]] | None = None) -> int:
     query = supabase.table(table_name).select("id", count="exact", head=True)
     for operator, column, value in filters or []:
-        query = getattr(query, operator)(column, value)
+        if operator == "not_is":
+            query = query.not_.is_(column, value)
+        else:
+            query = getattr(query, operator)(column, value)
     result = query.execute()
     return int(result.count or 0)
 
@@ -432,11 +435,105 @@ def revoke_session(session_id: UUID, http_request: Request, admin: dict = Depend
     return {"success": True}
 
 
+_AUDIT_SECRET_KEYS = ("password", "token", "secret", "code", "hash", "cipher", "nonce")
+
+
+def _redact_audit(value):
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            lowered = str(key).lower()
+            if any(part in lowered for part in _AUDIT_SECRET_KEYS):
+                redacted[key] = "[REDACTED]"
+            elif lowered == "email" and isinstance(item, str):
+                local, separator, domain = item.partition("@")
+                redacted[key] = f"{local[:2]}***{separator}{domain}" if separator else "[REDACTED]"
+            else:
+                redacted[key] = _redact_audit(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_audit(item) for item in value]
+    return value
+
+
 @router.get("/audit-logs")
-def audit_logs(limit: int = 50, offset: int = 0, admin: dict = Depends(require_permissions("audit.read"))):
-    limit = max(1, min(limit, 100))
-    result = supabase.table("admin_audit_logs").select("id,admin_user_id,action,resource_type,resource_id,target_user_id,target_scan_id,before_data,after_data,metadata_masked,created_at").order("created_at", desc=True).range(offset, offset + limit - 1).execute()
-    return {"success": True, "data": result.data or []}
+def audit_logs(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    action: str | None = Query(None, max_length=100),
+    resource_type: str | None = Query(None, max_length=80),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
+    admin: dict = Depends(require_permissions("audit.read")),
+):
+    del admin
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(status_code=422, detail="نطاق التاريخ غير صحيح")
+    query = supabase.table("admin_audit_logs").select(
+        "id,admin_user_id,action,resource_type,resource_id,target_user_id,target_scan_id,request_id,created_at",
+        count="exact",
+    )
+    if action:
+        query = query.eq("action", action.strip())
+    if resource_type:
+        query = query.eq("resource_type", resource_type.strip())
+    if from_date:
+        query = query.gte("created_at", from_date.isoformat())
+    if to_date:
+        query = query.lte("created_at", to_date.isoformat())
+    result = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+    return {"success": True, "data": result.data or [], "meta": {"limit": limit, "offset": offset, "total": int(result.count or 0)}}
+
+
+@router.get("/audit-logs/{log_id}")
+def audit_log_details(log_id: UUID, admin: dict = Depends(require_permissions("audit.read"))):
+    del admin
+    result = supabase.table("admin_audit_logs").select(
+        "id,admin_user_id,action,resource_type,resource_id,target_user_id,target_scan_id,request_id,before_data,after_data,metadata_masked,created_at"
+    ).eq("id", str(log_id)).limit(1).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="سجل التدقيق غير موجود")
+    row = result.data[0]
+    row["before_data"] = _redact_audit(row.get("before_data") or {})
+    row["after_data"] = _redact_audit(row.get("after_data") or {})
+    row["metadata_masked"] = _redact_audit(row.get("metadata_masked") or {})
+    return {"success": True, "data": row}
+
+
+@router.get("/security/overview")
+def security_overview(
+    range_days: int = Query(7, ge=1, le=30),
+    admin: dict = Depends(require_permissions("audit.read")),
+):
+    del admin
+    period_start = now() - timedelta(days=range_days)
+    period_iso = period_start.isoformat()
+    try:
+        failed_outcomes = ["INVALID_CREDENTIALS", "INVALID_2FA", "RATE_LIMITED", "LOCKED", "SUSPENDED"]
+        data = {
+            "range_days": range_days,
+            "period_start": period_iso,
+            "generated_at": now().isoformat(),
+            "login_attempts": {
+                "total": _count("admin_login_attempts", [("gte", "created_at", period_iso)]),
+                "successful": _count("admin_login_attempts", [("gte", "created_at", period_iso), ("eq", "outcome", "SUCCESS")]),
+                "failed": sum(_count("admin_login_attempts", [("gte", "created_at", period_iso), ("eq", "outcome", outcome)]) for outcome in failed_outcomes),
+                "rate_limited": _count("admin_login_attempts", [("gte", "created_at", period_iso), ("eq", "outcome", "RATE_LIMITED")]),
+            },
+            "sessions": {
+                "active": _count("admin_sessions", [("is_", "revoked_at", "null"), ("gte", "expires_at", now().isoformat())]),
+                "revoked": _count("admin_sessions", [("gte", "created_at", period_iso), ("not_is", "revoked_at", "null")]),
+            },
+            "admins": {
+                "active": _count("admin_users", [("eq", "status", "ACTIVE")]),
+                "suspended": _count("admin_users", [("eq", "status", "SUSPENDED")]),
+            },
+            "audit_events": _count("admin_audit_logs", [("gte", "created_at", period_iso)]),
+        }
+        data["risk_level"] = "HIGH" if data["login_attempts"]["rate_limited"] > 0 else "ELEVATED" if data["login_attempts"]["failed"] >= 5 else "NORMAL"
+        return {"success": True, "data": data}
+    except Exception:
+        raise HTTPException(status_code=503, detail="تعذر تحميل مؤشرات أمان الإدارة") from None
 
 
 @router.post("/invitations")
