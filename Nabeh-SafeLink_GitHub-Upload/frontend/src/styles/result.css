@@ -409,3 +409,69 @@
 @keyframes confidence-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @media (max-width: 560px) { .result-trust-strip { align-items: flex-start; } .result-trust-title { flex-basis: 100%; margin-bottom: 2px; } .result-trust-strip > span:not(.result-trust-title) { font-size: 9px; } }
 @media (prefers-reduced-motion: reduce) { .result-main-card, .result-main-card > *, .result-side-panel > *, .confidence-fill { animation: none; } }
+
+/* Phase 5: unified fluid result layout for URL and SMS without removing evidence. */
+.result-page .page-container { max-width: var(--layout-max); margin-inline: auto; }
+.result-desktop-grid { grid-template-columns: minmax(0, 1.55fr) minmax(280px, .8fr); gap: clamp(20px, 4vw, 56px); }
+.result-desktop-grid > * { min-width: 0; }
+.result-main-card { min-width: 0; padding: clamp(18px, 3.5vw, 34px) !important; }
+.result-side-panel { min-width: 0; gap: clamp(16px, 3vw, 28px); }
+.result-badge { min-width: 0; padding: clamp(13px, 2.5vw, 19px); gap: clamp(10px, 2vw, 16px); }
+.result-badge > svg { flex: 0 0 auto; }
+.result-badge-labels { min-width: 0; overflow-wrap: anywhere; }
+.result-badge-ar, .result-badge-en, .result-title, .result-desc { overflow-wrap: anywhere; }
+.result-trust-strip { min-width: 0; }
+.result-trust-strip > span { max-width: 100%; overflow-wrap: anywhere; }
+.inspected-url-box { min-width: 0; padding: clamp(13px, 2.5vw, 18px); }
+.url-label { overflow-wrap: anywhere; }
+.url-text { max-width: 100%; overflow-wrap: anywhere; }
+.confidence-block, .details-block, .explanation-block, .ml-details-block, .result-actions { min-width: 0; padding: clamp(14px, 2.5vw, 22px); }
+.confidence-header { gap: 10px; flex-wrap: wrap; }
+.details-title { min-width: 0; overflow-wrap: anywhere; align-items: flex-start; }
+.details-title > span { min-width: 0; }
+.details-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.detail-item, .detail-label, .detail-value { min-width: 0; overflow-wrap: anywhere; }
+.explanation-header { min-width: 0; gap: 12px; }
+.explanation-header .details-title { flex: 1 1 240px; }
+.gemini-tag { max-width: 100%; overflow-wrap: anywhere; text-align: center; }
+.explanation-text, .reasons-list li, .rec-text { overflow-wrap: anywhere; }
+.reasons-list li { align-items: flex-start; }
+.reasons-list li svg, .recommendation-block > svg { flex: 0 0 auto; }
+.recommendation-block { min-width: 0; }
+.rec-content { min-width: 0; }
+.ml-body { min-width: 0; gap: 12px; flex-wrap: wrap; }
+.ml-stat { min-width: 0; overflow-wrap: anywhere; }
+.result-actions .btn { min-height: var(--control-height); }
+
+@media (max-width: 991px) {
+  .result-desktop-grid { grid-template-columns: minmax(0, 1fr); gap: var(--section-gap); }
+  .result-side-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .result-side-panel .result-actions { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .result-page .page-container { padding-inline: var(--content-gutter); }
+  .result-main-card { border-radius: clamp(18px, 5vw, 24px); }
+  .result-badge { align-items: flex-start; }
+  .result-badge-ar { font-size: clamp(17px, 5vw, 22px); }
+  .result-title { font-size: clamp(23px, 6vw, 30px); }
+  .result-desc { font-size: var(--text-base); }
+  .result-side-panel { grid-template-columns: minmax(0, 1fr); }
+  .result-side-panel .result-actions { grid-column: auto; }
+  .details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result-trust-strip { align-items: flex-start; }
+  .result-trust-title { flex-basis: 100%; margin-inline-end: 0; }
+  .result-trust-strip > span:not(.result-trust-title) { flex: 1 1 150px; }
+  .explanation-header { align-items: flex-start; flex-wrap: wrap; }
+  .explanation-header .details-title { flex-basis: 100%; }
+  .gemini-tag { align-self: flex-start; }
+  .recommendation-block { align-items: flex-start; }
+}
+
+@media (max-width: 380px) {
+  .result-page .page-container { padding-inline: 12px; }
+  .result-main-card { padding-inline: 15px !important; }
+  .details-grid { grid-template-columns: minmax(0, 1fr); }
+  .result-trust-strip > span:not(.result-trust-title) { flex-basis: 100%; }
+  .ml-body { align-items: flex-start; flex-direction: column; }
+}
