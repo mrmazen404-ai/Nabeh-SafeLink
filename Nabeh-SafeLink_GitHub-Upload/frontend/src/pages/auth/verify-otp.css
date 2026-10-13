@@ -14,14 +14,15 @@
 
 .otp-inputs {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 9px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(4px, 2vw, 9px);
   direction: ltr;
 }
 
 .otp-input-box {
   width: 100%;
-  height: 56px;
+  height: clamp(48px, 13vw, 60px);
+  aspect-ratio: 1;
   border: 1px solid var(--color-border);
   border-radius: 14px;
   background: var(--color-bg);
@@ -48,7 +49,7 @@
   text-align: center;
   padding: 0;
   margin: 0;
-  font: 700 22px/1 var(--font-sans);
+  font: 700 clamp(18px, 5vw, 22px)/1 var(--font-sans);
 }
 
 .verify-resend {
@@ -82,18 +83,7 @@
     padding-bottom: 8px;
   }
 
-  .otp-inputs {
-    gap: 6px;
-  }
-
-  .otp-input-box {
-    height: 51px;
-    border-radius: 12px;
-  }
-
-  .otp-input {
-    font-size: 20px;
-  }
+  .otp-input-box { border-radius: clamp(10px, 3vw, 14px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

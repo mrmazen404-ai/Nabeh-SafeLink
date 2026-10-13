@@ -111,7 +111,12 @@
 
 @media (max-width: 480px) {
   .register-page .login-shell {
-    padding-top: 12px;
-    padding-bottom: 12px;
+    padding-top: clamp(18px, 5vw, 24px);
+    padding-bottom: clamp(18px, 5vw, 24px);
   }
 }
+
+.register-page .password-criteria-box,
+.register-page .register-success { padding: clamp(11px, 3vw, 16px); }
+.register-page .criteria-list { gap: clamp(4px, 1.5vw, 7px); }
+.register-page .register-footer { margin-top: clamp(18px, 5vw, 28px); overflow-wrap: anywhere; }

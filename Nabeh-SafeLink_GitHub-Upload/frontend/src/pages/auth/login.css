@@ -224,3 +224,32 @@
 .auth-theme-control { width: 34px; padding: 0; }
 
 @media (max-width: 480px) { .auth-page-controls { top: 12px; inset-inline-end: 12px; } .auth-language-control span { display: none; } }
+
+/* Phase 3: mobile-first auth shell based on Welcome spacing and controls. */
+.login-page { min-height: 100svh; align-items: flex-start; padding: clamp(64px, 10vh, 96px) var(--page-gutter) clamp(24px, 6vh, 64px); }
+.login-shell { width: min(100%, 460px); margin: auto; padding: clamp(20px, 4vw, 32px); border-radius: clamp(18px, 3vw, 24px); min-width: 0; }
+.login-branding { margin-bottom: clamp(16px, 3vw, 24px); }
+.login-branding .nabeh-logo-icon { width: clamp(48px, 14vw, 56px) !important; height: clamp(48px, 14vw, 56px) !important; }
+.login-welcome h1 { font-size: clamp(19px, 4.5vw, 24px); overflow-wrap: anywhere; }
+.login-welcome p, .login-register, .login-guest { overflow-wrap: anywhere; }
+.login-form { gap: clamp(10px, 2.5vw, 16px); }
+.login-field { min-height: var(--control-height); }
+.login-field input { height: calc(var(--control-height) - 2px); font-size: var(--text-base); }
+.login-password-toggle { min-width: var(--touch-target); min-height: var(--touch-target); }
+.login-utilities { flex-wrap: wrap; min-height: var(--touch-target); }
+.login-submit { min-height: var(--control-height); font-size: var(--text-base); }
+.login-error { overflow-wrap: anywhere; }
+
+@media (max-width: 480px) {
+  .login-page { padding-top: clamp(60px, 12vh, 84px); }
+  .login-shell { padding: clamp(18px, 5vw, 24px); }
+  .login-utilities { align-items: flex-start; gap: 8px 12px; }
+  .login-forgot { margin-inline-start: auto; }
+}
+
+@media (max-width: 340px) {
+  .login-shell { padding-inline: 16px; }
+  .login-field-icon { flex-basis: 36px; }
+  .login-field input { padding-inline: 8px; }
+  .login-utilities { font-size: 11px; }
+}

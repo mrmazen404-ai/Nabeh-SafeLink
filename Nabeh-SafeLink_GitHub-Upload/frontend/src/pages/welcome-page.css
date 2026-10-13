@@ -148,3 +148,35 @@
   .welcome-team-grid { grid-template-columns: 1fr 1fr; }
   .welcome-supervisor, .welcome-footer { flex-direction: column; align-items: center; text-align: center; }
 }
+
+/* Phase 3: shared fluid scale, preserving every Welcome section and action. */
+.welcome-page { padding-inline: var(--page-gutter); }
+.welcome-header, .welcome-hero, .welcome-mission, .welcome-features, .welcome-graduation, .welcome-footer { min-width: 0; }
+.welcome-header { width: min(100%, var(--layout-wide)); }
+.welcome-hero, .welcome-mission, .welcome-features, .welcome-graduation, .welcome-footer { width: min(100%, var(--layout-max)); }
+.welcome-hero { gap: clamp(28px, 7vw, 120px); }
+.welcome-hero h1 { font-size: clamp(32px, 5.2vw, 72px); overflow-wrap: anywhere; }
+.welcome-hero-description, .welcome-mission p, .welcome-feature-card p, .welcome-member strong { overflow-wrap: anywhere; }
+.welcome-actions { gap: clamp(8px, 1.5vw, 14px); }
+.welcome-primary-button, .welcome-secondary-button, .welcome-text-button { min-height: var(--control-height); }
+.welcome-visual { min-height: clamp(250px, 34vw, 390px); min-width: 0; }
+.welcome-shield-wrap { width: clamp(170px, 25vw, 275px); }
+
+@media (max-width: 640px) {
+  .welcome-page { padding-inline: var(--page-gutter); }
+  .welcome-header { flex-wrap: wrap; }
+  .welcome-controls { margin-inline-start: auto; }
+  .welcome-hero { margin-top: clamp(32px, 9vh, 55px); gap: clamp(16px, 5vw, 28px); }
+  .welcome-visual { min-height: clamp(240px, 70vw, 300px); }
+  .welcome-visual-card { max-width: 45%; padding: 8px 9px; font-size: 10px; }
+  .welcome-feature-card { padding: clamp(14px, 4vw, 18px); }
+  .welcome-graduation { margin-top: clamp(40px, 10vw, 75px); padding: clamp(18px, 5vw, 32px); }
+}
+
+@media (max-width: 380px) {
+  .welcome-header { align-items: center; }
+  .welcome-brand-copy strong { font-size: 17px; }
+  .welcome-brand-copy b { font-size: 11px; }
+  .welcome-team-grid { grid-template-columns: 1fr; }
+  .welcome-visual-card { font-size: 9px; }
+}
