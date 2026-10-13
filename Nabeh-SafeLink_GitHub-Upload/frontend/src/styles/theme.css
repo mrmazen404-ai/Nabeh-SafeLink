@@ -16,6 +16,16 @@
   --space-10: 40px;
   --space-12: 48px;
 
+  /* Unified fluid layout scale — shared with the Welcome visual language */
+  --layout-max: 1180px;
+  --layout-wide: 1400px;
+  --page-gutter: clamp(15px, 4vw, 64px);
+  --content-gutter: clamp(14px, 3vw, 40px);
+  --section-gap: clamp(20px, 4vw, 48px);
+  --card-padding: clamp(18px, 3vw, 32px);
+  --control-height: clamp(44px, 4vw, 52px);
+  --touch-target: 44px;
+
   /* Border Radii */
   --radius-xs: 4px;
   --radius-sm: 6px;
@@ -58,13 +68,13 @@
   --font-mono: 'Poppins', 'Inter', monospace;
 
   /* Fluid Typography Scale */
-  --text-xs: clamp(11px, 0.75rem, 12px);
-  --text-sm: clamp(13px, 0.85rem, 14px);
-  --text-base: clamp(14px, 0.95rem, 16px);
-  --text-lg: clamp(16px, 1.1rem, 18px);
-  --text-xl: clamp(18px, 1.3vw, 22px);
-  --text-2xl: clamp(22px, 1.8vw, 28px);
-  --text-3xl: clamp(26px, 2.5vw, 36px);
+  --text-xs: clamp(11px, 0.72rem + 0.08vw, 12px);
+  --text-sm: clamp(13px, 0.78rem + 0.12vw, 14px);
+  --text-base: clamp(14px, 0.86rem + 0.18vw, 16px);
+  --text-lg: clamp(16px, 0.95rem + 0.25vw, 18px);
+  --text-xl: clamp(18px, 1rem + 0.45vw, 22px);
+  --text-2xl: clamp(22px, 1.15rem + 0.8vw, 28px);
+  --text-3xl: clamp(26px, 1.25rem + 1.2vw, 36px);
 
   /* Shadows */
   --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
@@ -132,13 +142,19 @@ html {
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
   min-height: 100dvh;
   background-color: var(--color-bg-subtle);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
 }
+
+button, input, select, textarea { font: inherit; }
+img, svg, video, canvas { max-width: 100%; }
 
 /* Strict Accessibility Focus Rings */
 button:focus-visible,
@@ -164,15 +180,16 @@ a:focus-visible {
 
 .page-container {
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--layout-max);
   margin: 0 auto;
-  padding: var(--space-6) var(--space-6) var(--space-12);
+  padding: var(--section-gap) var(--content-gutter) clamp(36px, 6vw, 64px);
   flex: 1;
+  min-width: 0;
 }
 
 @media (min-width: 1024px) {
   .page-container {
-    padding: var(--space-8) var(--space-10) var(--space-12);
+    padding-inline: clamp(28px, 4vw, 52px);
   }
 }
 
@@ -190,10 +207,10 @@ a:focus-visible {
 
 .app-header-container {
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--layout-wide);
   margin: 0 auto;
-  padding: 0 var(--space-6);
-  min-height: 68px;
+  padding-inline: var(--page-gutter);
+  min-height: clamp(60px, 5vw, 72px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -271,10 +288,11 @@ a:focus-visible {
 /* Card Component */
 .card {
   width: 100%;
+  min-width: 0;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-6);
+  border-radius: clamp(14px, 1.5vw, 22px);
+  padding: var(--card-padding);
   box-shadow: var(--shadow-xs);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
@@ -289,8 +307,8 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 48px;
-  padding: 10px 24px;
+  min-height: var(--control-height);
+  padding: 10px clamp(16px, 2.5vw, 24px);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
@@ -300,6 +318,7 @@ a:focus-visible {
   transition: all var(--transition-fast);
   text-decoration: none;
   user-select: none;
+  white-space: normal;
 }
 
 .btn-primary {
