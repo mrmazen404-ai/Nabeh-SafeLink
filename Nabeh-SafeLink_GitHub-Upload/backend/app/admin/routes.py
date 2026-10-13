@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 
-from app.admin.dependencies import bearer_token, client_ip, current_admin, require_permissions, require_roles
+from app.admin.dependencies import ROLE_PERMISSIONS, bearer_token, client_ip, current_admin, require_permissions, require_roles
 from app.admin.security import (
     AdminSecurityError, decrypt_totp_secret, encrypt_totp_secret, hash_password,
     hash_value, issue_access_token, issue_challenge_token, issue_setup_token,
@@ -266,7 +266,8 @@ def logout_all(http_request: Request, admin: dict = Depends(current_admin)):
 
 @router.get("/auth/me")
 def me(admin: dict = Depends(current_admin)):
-    return {"success": True, "data": admin}
+    profile = {**admin, "permissions": sorted(ROLE_PERMISSIONS.get(admin.get("role"), frozenset()))}
+    return {"success": True, "data": profile}
 
 
 @router.get("/sessions")
