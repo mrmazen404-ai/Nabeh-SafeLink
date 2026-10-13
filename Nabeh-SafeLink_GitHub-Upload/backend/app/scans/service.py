@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 from app.db.supabase_client import supabase
 from app.observability import log_event, resource_id
-from app.gemini.client import generate_explanation
+from app.gemini.client import generate_explanation, analyze_sms_message
 from app.ml.predictor import predict_url
 from app.virustotal.client import check_url_virustotal
 from app.dashboard.realtime import manager
@@ -35,13 +35,25 @@ class ScanService:
     def analyze_text_phishing(text: str, has_embedded_url: bool = False) -> dict:
         text_lower = text.lower()
         matches = [word for word in ARABIC_PHISHING_KEYWORDS if word in text_lower or word in text]
+        
+        safe_greetings = (
+            "السلام عليكم", "سلام عليكم", "صباح الخير", "مساء الخير",
+            "مرحبا", "أهلا", "اهلاً", "شكرا", "شكراً", "كيف حالك",
+            "متى الموعد", "الله يعطيك العافية", "جزاك الله خير",
+            "عيد مبارك", "كل عام وأنتم بخير", "الحمد لله", "هلا", "مرفق"
+        )
+        has_safe_greeting = any(g in text for g in safe_greetings)
+
         if len(matches) >= 3:
-            classification, confidence = ("DANGEROUS", 0.85) if has_embedded_url else ("SUSPICIOUS", 0.70)
-        elif matches:
-            classification, confidence = "SUSPICIOUS", 0.65
+            classification, confidence = ("DANGEROUS", 0.90) if has_embedded_url else ("SUSPICIOUS", 0.75)
+        elif len(matches) >= 1:
+            classification, confidence = ("DANGEROUS", 0.85) if has_embedded_url else ("SUSPICIOUS", 0.65)
+        elif has_safe_greeting or (not has_embedded_url and len(text.strip()) <= 120):
+            # Safe everyday greetings or normal short messages with no phishing keywords are SAFE 100%
+            classification, confidence = "SAFE", 0.99
         else:
-            # Absence of these keywords is not evidence that a message is safe.
             classification, confidence = "UNKNOWN", None
+
         return {
             "classification": classification,
             "confidence": confidence,
@@ -329,7 +341,7 @@ class ScanService:
 
     @classmethod
     async def process_text_scan(cls, text_content: str, language: str = "ar") -> dict:
-        """Standalone SMS / Text Message Smishing Scanner (Text NLP -> Embedded Link Audit -> Gemini Research)."""
+        """100% AI-Driven SMS / Text Message Smishing Scanner (Gemini AI API + Link Audit Pipeline)."""
         extracted_url = cls.extract_url_from_text(text_content)
         vt_result, ml_result = {}, {}
 
@@ -347,56 +359,73 @@ class ScanService:
                 vt_result = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
 
             combined = cls.combine_scan_results(vt_result, ml_result)
-            text_signal = cls.analyze_text_phishing(text_content, has_embedded_url=True)
-            combined = cls._merge_text_signal(combined, text_signal)
         else:
-            text_signal = cls.analyze_text_phishing(text_content)
             combined = {
-                "classification": text_signal["classification"],
-                "confidence": text_signal["confidence"],
+                "classification": "UNKNOWN",
+                "confidence": None,
                 "weighted_score": None,
-                "source": "SMS_TEXT_ANALYZER",
+                "source": "TEXT_ONLY",
             }
             vt_result = {"status": "NOT_APPLICABLE", "total_engines": 0}
 
-        combined["evidence"] = {
+        evidence = {
             "ml": ml_result,
             "virustotal": vt_result,
             "input_type": "TEXT",
             "extracted_url": extracted_url,
-            "keyword_matches": cls.analyze_text_phishing(text_content).get("keyword_matches", []),
+            "url_combined_verdict": combined,
         }
 
-        try:
-            explanation = await generate_explanation(
-                input_value=text_content,
-                classification=combined["classification"],
-                evidence=combined.get("evidence", {}),
-                language=language,
-            )
-        except Exception:
-            logger.exception("sms_gemini_failed")
-            explanation = cls._local_explanation(combined["classification"], language)
+        # 100% Gemini AI-driven SMS context & intent analysis via API
+        ai_analysis = await analyze_sms_message(
+            text_content=text_content,
+            extracted_url=extracted_url,
+            evidence=evidence,
+            language=language,
+        )
+
+        classification = ai_analysis.get("classification", combined.get("classification", "UNKNOWN"))
+        confidence = float(ai_analysis.get("confidence") or combined.get("confidence") or 0.85)
+        fraud_prob = float(ai_analysis.get("fraud_probability") or (0.95 if classification == "DANGEROUS" else (0.60 if classification == "SUSPICIOUS" else 0.01)))
+
+        explanation = {
+            "summary": ai_analysis.get("summary", ""),
+            "reasons": ai_analysis.get("reasons", []),
+            "recommendation": ai_analysis.get("recommendation", ""),
+            "provider": ai_analysis.get("provider", "GEMINI_AI"),
+            "claimed_sender": ai_analysis.get("claimed_sender", "جهة غير محددة"),
+            "official_domain": ai_analysis.get("official_domain", "غير متاح"),
+            "official_portal_url": ai_analysis.get("official_portal_url", "غير متاح"),
+            "claim_verdict_explanation": ai_analysis.get("claim_verdict_explanation", ""),
+            "action_plan_steps": ai_analysis.get("action_plan_steps", []),
+            "lure_type": ai_analysis.get("lure_type", "غير محدد"),
+            "authenticity_status": ai_analysis.get("authenticity_status", "UNKNOWN"),
+            "fraud_probability": fraud_prob,
+        }
 
         return {
             "scan_kind": "SMS_TEXT",
             "input_type": "TEXT",
             "input_value": text_content,
             "extracted_url": extracted_url or None,
-            "classification": combined["classification"],
-            "confidence": combined.get("confidence"),
-            "source": combined["source"],
+            "classification": classification,
+            "confidence": confidence,
+            "fraud_probability": fraud_prob,
+            "source": ai_analysis.get("provider", "GEMINI_AI"),
             "text_analysis": {
                 "has_embedded_url": bool(extracted_url),
                 "extracted_url": extracted_url or None,
-                "phishing_keywords": cls.analyze_text_phishing(text_content).get("keyword_matches", []),
+                "lure_type": ai_analysis.get("lure_type", ""),
+                "fraud_probability": fraud_prob,
             },
             "stages": {
                 "stage1_text_nlp": {
-                    "name": "Stage 1: SMS Phishing & Lure NLP Analysis",
-                    "classification": combined["classification"],
-                    "confidence": combined.get("confidence"),
-                    "source": combined.get("source"),
+                    "name": "Stage 1: Gemini AI SMS Context & Intent Analysis",
+                    "classification": classification,
+                    "confidence": confidence,
+                    "fraud_probability": fraud_prob,
+                    "lure_type": ai_analysis.get("lure_type", "N/A"),
+                    "source": ai_analysis.get("provider", "GEMINI_AI"),
                 },
                 "stage2_link_audit": {
                     "name": "Stage 2: Embedded Link Security Audit",
@@ -404,12 +433,13 @@ class ScanService:
                     "malicious": vt_result.get("malicious", 0),
                     "suspicious": vt_result.get("suspicious", 0),
                     "total_engines": vt_result.get("total_engines", 0),
+                    "ml_phishing_prob": ml_result.get("phishing_prob"),
                 },
                 "stage3_gemini_sms": {
-                    "name": "Stage 3: Gemini AI Smishing & Fraud Research",
-                    "provider": explanation.get("provider", "TEMPLATE"),
-                    "summary": explanation.get("summary", ""),
-                    "recommendation": explanation.get("recommendation", ""),
+                    "name": "Stage 3: Gemini AI Smishing Threat Research",
+                    "provider": ai_analysis.get("provider", "GEMINI_AI"),
+                    "summary": ai_analysis.get("summary", ""),
+                    "recommendation": ai_analysis.get("recommendation", ""),
                 },
             },
             "explanation": explanation,

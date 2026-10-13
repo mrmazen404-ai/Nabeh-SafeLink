@@ -1,0 +1,265 @@
+import { useState } from 'react';
+import Header from './Header';
+import { useLanguage } from '../context/LanguageContext';
+import {
+  CheckCircleIcon,
+  AlertTriangleIcon,
+  XCircleIcon,
+  HelpCircleIcon,
+  ShieldCheckIcon,
+  CpuIcon,
+  SparklesIcon,
+  PinIcon,
+  TargetIcon,
+  RefreshIcon,
+  ClipboardIcon,
+  LinkIcon
+} from './Icons';
+import '../styles/result.css';
+
+export default function UrlResultScreen({ result, onReset, activeTab, setActiveTab, isGuest = true, onNavigateAuth }) {
+  const { t, dir, lang } = useLanguage();
+  const [copied, setCopied] = useState(false);
+  const classification = result?.classification || 'UNKNOWN';
+
+  const CONFIG = {
+    SAFE: {
+      icon: CheckCircleIcon,
+      labelAr: 'رابط آمن وموثوق',
+      labelEn: 'Safe & Verified URL',
+      title: lang === 'ar' ? 'الرابط آمن وموثوق' : 'Safe & Verified Link',
+      description: lang === 'ar'
+        ? 'ينتمي هذا الرابط إلى نطاق معتمد ولم تُسجل أي مؤشرات تهديد سيبراني أو برمجيات خبيثة عبر محركات الفحص العالمية.'
+        : 'This URL belongs to a trusted domain with no malware or phishing threat indicators detected.',
+      className: 'safe',
+    },
+    SUSPICIOUS: {
+      icon: AlertTriangleIcon,
+      labelAr: 'رابط مشبوه بحاجة للحذر',
+      labelEn: 'Suspicious URL',
+      title: lang === 'ar' ? 'تنبيه: رابط مشبوه يسترعي الحذر' : 'Warning: Suspicious Link',
+      description: lang === 'ar'
+        ? 'يحتوي الرابط على مؤشرات تستدعي الحذر مثل عمر النطاق أو التركيب الهيكلي. يُفضل التأكد من المصدر قبل المتابعة.'
+        : 'This link exhibits structural or domain anomalies. Caution and verification are recommended.',
+      className: 'suspicious',
+    },
+    DANGEROUS: {
+      icon: XCircleIcon,
+      labelAr: 'رابط احتيالي خطير (Phishing)',
+      labelEn: 'High Risk Dangerous URL',
+      title: lang === 'ar' ? 'خطر! رابط احتيالي غير آمن' : 'Danger! Malicious Phishing Link',
+      description: lang === 'ar'
+        ? 'تم رصد مؤشرات خطورة أمنية وانتحال لعلامة تجارية أو توزيع برمجيات ضارة. لا تفتح الرابط ولا تدخل بياناتك الحساسة!'
+        : 'High-risk security threats, brand impersonation, or malware distribution detected. Do not proceed or enter credentials!',
+      className: 'dangerous',
+    },
+    UNKNOWN: {
+      icon: HelpCircleIcon,
+      labelAr: 'نتيجة غير محددة',
+      labelEn: 'Inconclusive Result',
+      title: lang === 'ar' ? 'تعذر التحقق الكامل من الرابط' : 'Inconclusive Link Audit',
+      description: lang === 'ar'
+        ? 'لم تتوفر معلومات كافية لإصدار حكم جازم حول هذا الرابط. توخَّ الحذر وتجنب مشاركة بياناتك.'
+        : 'Insufficient evidence to provide a decisive verdict. Exercise caution when visiting this link.',
+      className: 'unknown',
+    },
+  };
+
+  const config = CONFIG[classification] || CONFIG.UNKNOWN;
+  const StatusIcon = config.icon;
+  const confidence = Number.isFinite(result?.confidence) ? (result.confidence * 100).toFixed(1) : null;
+  const vt = result?.virustotal || {};
+  const ml = result?.ml_model || {};
+  const exp = result?.explanation || {};
+  const targetUrl = result?.extracted_url || result?.input_value || '';
+
+  const totalEngines = vt.total_engines || 0;
+  const maliciousPct = totalEngines > 0 ? ((vt.malicious || 0) / totalEngines) * 100 : 0;
+  const suspiciousPct = totalEngines > 0 ? ((vt.suspicious || 0) / totalEngines) * 100 : 0;
+  const harmlessPct = totalEngines > 0 ? ((vt.harmless || 0) / totalEngines) * 100 : 0;
+
+  const handleCopyReport = () => {
+    if (isGuest || !navigator.clipboard?.writeText) return;
+    const reportText = `Nabeh SafeLink URL Audit Report:\nURL: ${targetUrl}\nClassification: ${config.title}\nConfidence: ${confidence || 'N/A'}%\nRecommendation: ${exp.recommendation || t('result.defaultRec')}`;
+    navigator.clipboard.writeText(reportText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const sourceLabel = result?.source ? t('result.sourceLabel', { source: result.source }) : t('result.hybridSource');
+
+  return (
+    <div className="result-page url-result-theme" dir={dir}>
+      <Header activeTab={activeTab} setActiveTab={setActiveTab} onNavigateAuth={onNavigateAuth} />
+
+      <main className="page-container">
+        <div className="result-desktop-grid">
+          {/* Main URL Analysis Section */}
+          <section className="card result-main-card" aria-label="شاشة نتيجة فحص الرابط">
+            {/* Status Badge */}
+            <div className={`result-badge result-badge-${config.className}`} role="status">
+              <StatusIcon size={32} color="currentColor" />
+              <div className="result-badge-labels">
+                <span className="result-badge-ar">{config.labelAr}</span>
+                <span className="result-badge-en">{config.labelEn} • {sourceLabel}</span>
+              </div>
+            </div>
+
+            <div className="result-trust-strip">
+              <span className="result-trust-title">
+                {lang === 'ar' ? 'فحص ودراسة أمان الرابط (URL Link Audit)' : 'URL LINK SECURITY AUDIT'}
+              </span>
+              <span><ShieldCheckIcon size={14} />{lang === 'ar' ? 'تحليل هيكلي ومحركات متعددة' : 'Multi-engine analysis'}</span>
+              <span><SparklesIcon size={14} />{lang === 'ar' ? 'مدعوم بـ Google Gemini AI' : 'Google Gemini AI'}</span>
+            </div>
+
+            {/* Inspected URL Box */}
+            <div className="inspected-url-box">
+              <span className="url-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <LinkIcon size={16} color="var(--color-secondary)" />
+                {lang === 'ar' ? 'الرابط المباشر المفحوص (Inspected URL):' : 'Inspected URL:'}
+              </span>
+              <div className="url-text" dir="ltr" style={{ wordBreak: 'break-all', marginTop: '6px', fontFamily: 'monospace', fontSize: '0.95rem' }}>
+                {targetUrl}
+              </div>
+            </div>
+
+            <h2 className="result-title">{config.title}</h2>
+            <p className="result-desc">{config.description}</p>
+
+            {/* Confidence Bar */}
+            {confidence !== null && (
+              <div className="confidence-block" aria-label={`${t('result.confidenceLabel')}: ${confidence}%`}>
+                <div className="confidence-header">
+                  <span>{t('result.confidenceLabel')}</span>
+                  <span className={`confidence-value confidence-value-${config.className}`}>{confidence}%</span>
+                </div>
+                <div className="confidence-bar">
+                  <div className={`confidence-fill confidence-fill-${config.className}`} style={{ width: `${confidence}%` }}></div>
+                </div>
+              </div>
+            )}
+
+            {/* Gemini AI Research Explanation */}
+            {exp.summary && (
+              <div className="explanation-block">
+                <div className="explanation-header">
+                  <h3 className="details-title">
+                    <SparklesIcon size={18} color="var(--color-secondary)" />
+                    <span>{lang === 'ar' ? 'تقرير الذكاء الاصطناعي والأبحاث الميدانية (Gemini Research):' : 'AI Research & Intelligence Report:'}</span>
+                  </h3>
+                  <span className="gemini-tag">{exp.provider || t('result.aiModelTag')}</span>
+                </div>
+
+                <p className="explanation-text">{exp.summary}</p>
+
+                {Array.isArray(exp.reasons) && exp.reasons.length > 0 && (
+                  <ul className="reasons-list" style={{ marginTop: '16px' }}>
+                    {exp.reasons.map((reason, i) => (
+                      <li key={i}>
+                        <PinIcon size={14} color="var(--color-secondary)" />
+                        <span>{reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {exp.recommendation && (
+                  <div className="recommendation-block">
+                    <TargetIcon size={18} color="var(--color-secondary)" />
+                    <div className="rec-content">
+                      <span className="rec-title">{lang === 'ar' ? 'توصية نابه لأمان الروابط:' : 'Nabeh Link Safety Recommendation:'}</span>
+                      <span className="rec-text">{exp.recommendation}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Engine Side Panel */}
+          <aside className="result-side-panel">
+            {/* VirusTotal 92+ Engines Visual Proportional Distribution Chart */}
+            {totalEngines > 0 && (
+              <div className="card details-block">
+                <h3 className="details-title">
+                  <ShieldCheckIcon size={18} color="var(--color-secondary)" />
+                  <span>{lang === 'ar' ? 'توزيع فحوصات المحركات العالمية (VirusTotal):' : 'VirusTotal Engine Distribution:'}</span>
+                </h3>
+
+                {/* Proportional Stacked Progress Bar */}
+                <div style={{ height: '10px', display: 'flex', borderRadius: '5px', overflow: 'hidden', margin: '12px 0 16px 0', background: 'var(--color-bg-subtle)' }}>
+                  {vt.malicious > 0 && <div style={{ width: `${maliciousPct}%`, background: 'var(--color-danger)' }} title={`Malicious: ${vt.malicious}`} />}
+                  {vt.suspicious > 0 && <div style={{ width: `${suspiciousPct}%`, background: 'var(--color-warning)' }} title={`Suspicious: ${vt.suspicious}`} />}
+                  {vt.harmless > 0 && <div style={{ width: `${harmlessPct}%`, background: 'var(--color-success)' }} title={`Harmless: ${vt.harmless}`} />}
+                </div>
+
+                <div className="details-grid">
+                  <div className="detail-item">
+                    <span className="detail-label">{t('result.vtDangerous')}</span>
+                    <span className="detail-value" style={{ color: 'var(--color-danger)' }}>{vt.malicious || 0}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">{t('result.vtSuspicious')}</span>
+                    <span className="detail-value" style={{ color: 'var(--color-warning)' }}>{vt.suspicious || 0}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">{t('result.vtSafe')}</span>
+                    <span className="detail-value" style={{ color: 'var(--color-success)' }}>{vt.harmless || 0}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">{t('result.vtTotal')}</span>
+                    <span className="detail-value">{totalEngines}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* LightGBM Model Prediction Details */}
+            {ml.classification && (
+              <div className="card ml-details-block">
+                <div className="ml-header">
+                  <CpuIcon size={18} color="var(--color-secondary)" />
+                  <h3 className="details-title" style={{ margin: 0 }}>{t('result.mlModelTitle')}</h3>
+                </div>
+                <div className="ml-body">
+                  <div className="ml-stat">
+                    <span className="ml-stat-label">{t('result.mlLocalPrediction')}</span>
+                    <span className={`ml-stat-badge ml-${(ml.classification || '').toLowerCase()}`}>
+                      {ml.classification === 'SAFE' ? t('result.mlSafeBadge') : ml.classification === 'DANGEROUS' ? t('result.mlDangerousBadge') : t('result.mlSuspiciousBadge')}
+                    </span>
+                  </div>
+                  <div className="ml-stat">
+                    <span className="ml-stat-val" dir="ltr">
+                      {Number.isFinite(ml.phishing_prob)
+                        ? t('result.mlRiskProb', { prob: (ml.phishing_prob * 100).toFixed(1) })
+                        : (lang === 'ar' ? 'النموذج غير متاح' : 'Model Unavailable')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="card result-actions">
+              <button className="btn btn-primary" onClick={onReset} type="button">
+                <RefreshIcon size={18} color="#FFFFFF" />
+                <span>{t('result.scanNewBtn')}</span>
+              </button>
+              {!isGuest && (
+                <button
+                  className={`btn ${copied ? 'btn-navy' : 'btn-outline'}`}
+                  onClick={handleCopyReport}
+                  type="button"
+                >
+                  <ClipboardIcon size={18} color="currentColor" />
+                  <span>{copied ? t('result.copiedReportBtn') : t('result.copyReportBtn')}</span>
+                </button>
+              )}
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+  );
+}

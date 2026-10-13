@@ -51,8 +51,17 @@ def _get_client():
         client = genai.Client(api_key=current_key)
     return client
 
-# Models ordered by priority for current Google AI Studio API keys
-PRIMARY_MODELS = ["gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"]
+# Resilient multi-tier model cascade ordered from latest high-speed models to bedrock versions
+PRIMARY_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-flash-latest",
+]
 
 SYSTEM_INSTRUCTION = """
 You are a top-tier cybersecurity AI research analyst for Nabeh SafeLink (نابه).
@@ -68,7 +77,7 @@ async def generate_explanation(
 ) -> dict:
     """
     Generates structured AI explanation asynchronously with real-time web intelligence.
-    Falls back gracefully if API errors occur.
+    Employs a resilient multi-tier model fallback ladder with zero-downtime local fallback.
     """
     lang_name = "Arabic" if language == "ar" else "English"
     evidence = evidence or {}
@@ -125,10 +134,11 @@ Respond ONLY in valid JSON matching this exact structure:
         log_event(logger, logging.WARNING, "gemini_client_unavailable", operation_id=operation_id)
         return _local_explanation(classification, language, input_value=input_value, evidence=evidence)
 
-    # Try models in priority order
+    # Multi-tier model fallback cascade: iterates through every model until a successful response
     for model_name in PRIMARY_MODELS:
         log_event(logger, logging.INFO, "gemini_model_attempt_started", operation_id=operation_id, model=model_name, mode="search")
-        # Attempt 1: Search Grounded Generation
+        
+        # Mode 1: Search Grounded Generation
         try:
             response = await gemini_client.aio.models.generate_content(
                 model=model_name,
@@ -158,7 +168,7 @@ Respond ONLY in valid JSON matching this exact structure:
         except Exception as error:
             log_event(logger, logging.WARNING, "gemini_model_attempt_failed", operation_id=operation_id, model=model_name, mode="search", error_type=safe_error(error))
 
-        # Attempt 2: Standard Gemini Generation
+        # Mode 2: Standard Gemini JSON Generation
         try:
             response = await gemini_client.aio.models.generate_content(
                 model=model_name,
@@ -207,6 +217,192 @@ Respond ONLY in valid JSON matching this exact structure:
 
     log_event(logger, logging.WARNING, "gemini_provider_fallback_used", operation_id=operation_id)
     return _local_explanation(classification, language, input_value=input_value, evidence=evidence)
+
+
+SMS_SYSTEM_INSTRUCTION = """
+You are a senior cybersecurity AI research analyst specializing in SMS Smishing, Social Engineering, and Fraud Detection for Nabeh SafeLink (نابه).
+Your mission is to read and comprehend the given SMS text message, perform real-world research (including Google search grounding if available) to verify claimed organizations, active scam alerts, and official domains versus fraudulent spoofing, AND PROVIDE A STEP-BY-STEP ACTION & GUIDANCE PLAN FOR THE USER.
+
+Cybersecurity Analysis & Guidance Rules:
+1. Normal, friendly, everyday greetings, family messages, or benign queries (e.g. "السلام عليكم", "كيف حالك", "صباح الخير", "شكرا لك", "متى نلتقي") MUST be evaluated as SAFE (100% safe, 0.0 fraud probability, classification SAFE).
+2. Fraudulent lures (bank account suspensions, OTP theft, fake prize claims, urgent traffic fines, impersonating official Saudi portals like Al Rajhi, SNB, Absher, Nafath, Tawakkalna, SPL/Post, DHL, Aramex) MUST be classified as DANGEROUS or SUSPICIOUS based on threat severity.
+3. Perform research and guidance to identify:
+   - "claimed_sender": The official entity or brand mentioned/impersonated in the message in requested language.
+   - "official_domain": The verified true official registered domain for that organization (e.g., "alrajhibank.com.sa", "absher.sa", "iam.gov.sa").
+   - "official_portal_url": The exact official HTTPS website/portal URL where the user can safely log in or check their status directly (e.g. "https://www.alrajhibank.com.sa", "https://www.absher.sa", "https://iam.gov.sa").
+   - "claim_verdict_explanation": A clear statement explaining if the claim/lure is a complete hoax or fabrication with no basis in truth (e.g., "ادعاء كاذب لا أساس له من الصحة؛ الجهات الرسمية لا تصدر طلبات تحديث بيانات نصية إطلاقاً").
+   - "lure_type": The social engineering psychological tactic used (e.g., "ادعاء إيقاف حساب بنكي", "ادعاء طرد بريدي معلق", "تأكيد بطاقة صراف").
+   - "authenticity_status": Official verdict status in requested language (e.g. "احتيالية مزيفة (Fake Smishing SMS)", "مشبوهة غير موثوقة", "رسمية وحقيقية").
+   - "action_plan_steps": A numbered, actionable step-by-step guidance plan in requested language telling the user exactly what to do safely (e.g., ["1. تجنب النقر على أي رابط أو التواصل مع الرقم المرسل.", "2. الدخول المباشر إلى المنصة الرسمية المعتمدة بشكل مستقل.", "3. الإبلاغ عن الرسالة الاحتيالية فوراً للرقم الموحد (330330)."]).
+4. If an embedded URL is present in the SMS text, synthesize the link's threat evidence (ML probability & VirusTotal engine flags) together with the SMS context lure and real-world web research findings.
+
+Respond ONLY in valid JSON matching this exact structure:
+{
+  "classification": "SAFE" | "SUSPICIOUS" | "DANGEROUS",
+  "confidence": float between 0.5 and 1.0,
+  "fraud_probability": float between 0.0 and 1.0,
+  "claimed_sender": "string describing claimed organization/sender in requested language",
+  "official_domain": "string stating official domain name (e.g. alrajhibank.com.sa)",
+  "official_portal_url": "string stating exact official portal HTTPS URL (e.g. https://www.absher.sa)",
+  "claim_verdict_explanation": "string explaining why claim is false or true in requested language",
+  "lure_type": "string describing lure tactic in requested language",
+  "authenticity_status": "string describing authenticity verdict in requested language",
+  "summary": "Clear 1-2 sentence summary explaining the AI research analysis in requested language for non-technical users",
+  "reasons": ["Key research reason 1 in requested language", "Key research reason 2 in requested language", "Key research reason 3 in requested language"],
+  "recommendation": "Practical actionable security advice in requested language",
+  "action_plan_steps": ["Step 1 in requested language", "Step 2 in requested language", "Step 3 in requested language"]
+}
+"""
+
+
+async def analyze_sms_message(
+    text_content: str,
+    extracted_url: str = "",
+    evidence: dict | None = None,
+    language: str = "ar",
+) -> dict:
+    """
+    Performs AI-driven SMS text message smishing analysis using Google Gemini API.
+    Employs Google Search Grounding to research real-world entities, active scams, and official domains.
+    Provides actionable guidance and step-by-step safe action plan for the user.
+    """
+    lang_name = "Arabic" if language == "ar" else "English"
+    evidence = evidence or {}
+    operation_id = resource_id(text_content)
+    log_event(logger, logging.INFO, "gemini_sms_analysis_started", operation_id=operation_id, language=language)
+
+    prompt = f"""
+SMS Message Text: "{text_content[:600]}"
+Embedded URL (if any): "{extracted_url or 'None'}"
+Requested Explanation Language: {lang_name}
+Link Analysis Evidence:
+{json.dumps(evidence, ensure_ascii=False)}
+
+Cybersecurity Research Instructions:
+1. Research and verify the true official entity, official domain, and official portal URL for any organization mentioned in the SMS message.
+2. Evaluate if the message uses deceptive lures, account suspension threats, fake package delivery claims, or OTP theft attempts. Explain if the claim is a complete hoax/fabrication.
+3. Create a step-by-step actionable safety guidance plan telling the user exactly how to proceed safely.
+4. Synthesize the embedded link's threat indicators (if any) together with the message text intent.
+
+Respond ONLY in valid JSON matching the requested structure.
+"""
+
+    current_key = _get_api_key()
+    gemini_client = _get_client() if current_key else None
+
+    if gemini_client:
+        for model_name in PRIMARY_MODELS:
+            log_event(logger, logging.INFO, "gemini_sms_model_attempt_started", operation_id=operation_id, model=model_name)
+
+            # Mode 1: Search Grounded Generation for SMS Research
+            try:
+                response = await gemini_client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SMS_SYSTEM_INSTRUCTION,
+                        tools=[types.Tool(google_search=types.GoogleSearch())],
+                        temperature=0.1,
+                    )
+                )
+                text = response.text.strip() if response.text else ""
+                text_clean = re.sub(r'^```json\s*', '', text)
+                text_clean = re.sub(r'\s*```$', '', text_clean)
+
+                parsed = json.loads(text_clean)
+                parsed["provider"] = f"GEMINI_SEARCH ({model_name})"
+                log_event(logger, logging.INFO, "gemini_sms_analysis_succeeded", operation_id=operation_id, model=model_name, mode="search")
+                return parsed
+            except Exception as error:
+                log_event(logger, logging.WARNING, "gemini_sms_search_attempt_failed", operation_id=operation_id, model=model_name, error_type=safe_error(error))
+
+            # Mode 2: Standard JSON Schema Generation
+            try:
+                response = await gemini_client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SMS_SYSTEM_INSTRUCTION,
+                        response_mime_type="application/json",
+                        temperature=0.1,
+                    )
+                )
+                text = response.text.strip() if response.text else ""
+                text_clean = re.sub(r'^```json\s*', '', text)
+                text_clean = re.sub(r'\s*```$', '', text_clean)
+
+                parsed = json.loads(text_clean)
+                parsed["provider"] = f"GEMINI_AI ({model_name})"
+                log_event(logger, logging.INFO, "gemini_sms_analysis_succeeded", operation_id=operation_id, model=model_name, mode="json")
+                return parsed
+            except Exception as error:
+                log_event(logger, logging.WARNING, "gemini_sms_json_attempt_failed", operation_id=operation_id, model=model_name, error_type=safe_error(error))
+                continue
+
+    return _local_sms_analysis(text_content, extracted_url, language, evidence)
+
+
+def _local_sms_analysis(text_content: str, extracted_url: str = "", language: str = "ar", evidence: dict | None = None) -> dict:
+    is_ar = language == "ar"
+    evidence = evidence or {}
+
+    safe_greetings = (
+        "السلام عليكم", "سلام عليكم", "صباح الخير", "مساء الخير",
+        "مرحبا", "أهلا", "اهلاً", "شكرا", "شكراً", "كيف حالك",
+        "متى الموعد", "الله يعطيك العافية", "جزاك الله خير",
+        "عيد مبارك", "كل عام وأنتم بخير", "الحمد لله", "هلا"
+    )
+    has_greeting = any(g in text_content for g in safe_greetings)
+    has_url = bool(extracted_url)
+
+    if not has_url and (has_greeting or len(text_content.strip()) <= 120):
+        classification = "SAFE"
+        confidence = 0.99
+        fraud_prob = 0.01
+        lure_type = "رسالة عادية آمنة" if is_ar else "Safe Normal Message"
+        summary = "الرسالة عبارة عن تواصل شخصي أو تحية عادية خالية من أي مؤشرات احتيال أو روابط مشبوهة." if is_ar else "Innocent message containing no fraudulent lures or suspicious links."
+        reasons = [
+            "خلو الرسالة من روابط استدراجية أو طلبات إدخال بيانات بنكية." if is_ar else "Message contains no phishing links or requests for credentials.",
+            "نص الرسالة يتضمن تحية شخصية أو تواصل اعتيادي آمن." if is_ar else "Message contains standard safe personal communication."
+        ]
+        recommendation = "رسالة آمنة لا تتطلب أي إجراء." if is_ar else "Safe message requiring no action."
+        official_portal = "غير متاح"
+        claim_verdict = "رسالة طبيعية لا تنطوي على ادعاءات مالية أو أمنية." if is_ar else "Normal message with no financial or security claims."
+        action_steps = [
+            "يمكنك التفاعل مع الرسالة والتواصل كالمعتاد." if is_ar else "You can interact and communicate normally."
+        ]
+    else:
+        url_verdict = evidence.get("url_combined_verdict", {})
+        classification = url_verdict.get("classification", "SUSPICIOUS") if has_url else "SUSPICIOUS"
+        confidence = 0.85
+        fraud_prob = 0.85 if classification == "DANGEROUS" else (0.50 if classification == "SUSPICIOUS" else 0.05)
+        lure_type = "ادعاء تحديث بيانات/رابط مضمن" if is_ar else "Data update/embedded link lure"
+        summary = "تحتوي الرسالة على رابط أو مصطلحات تستدعي الحذر والتحقق قبل التفاعل." if is_ar else "Message contains a link or terms requiring caution before interacting."
+        reasons = [
+            "وجود رابط مضمن يتطلب الفحص الأمني عبر المحركات." if is_ar else "Embedded URL detected requiring security audit.",
+        ]
+        recommendation = "تحقق من المصدر الرسمي للرسالة ولا تدخل بياناتك الحسّاسة." if is_ar else "Verify the official source and do not enter sensitive info."
+        official_portal = "https://www.my.gov.sa"
+        claim_verdict = "ادعاء مريب يحاكي أسلوب الاستدراج لحث المستخدم على التفاعل الفوري." if is_ar else "Suspicious lure attempt seeking immediate interaction."
+        action_steps = [
+            "تجنب النقر على أي رابط مرفق أو الاتصال بالرقم المرسل." if is_ar else "Avoid clicking links or calling the sender.",
+            "قم بالدخول المباشر للمنصة أو التطبيق الرسمي من خلال متصفحك أو متجر التطبيقات." if is_ar else "Access the official portal or app directly.",
+            "إعادة إرسال الرسالة إلى الرقم الموحد للإبلاغ عن الاحتيال (330330) في السعودية." if is_ar else "Report the scam message to official anti-fraud numbers."
+        ]
+
+    return {
+        "classification": classification,
+        "confidence": confidence,
+        "fraud_probability": fraud_prob,
+        "lure_type": lure_type,
+        "summary": summary,
+        "reasons": reasons,
+        "recommendation": recommendation,
+        "official_portal_url": official_portal,
+        "claim_verdict_explanation": claim_verdict,
+        "action_plan_steps": action_steps,
+        "provider": "LOCAL_AI_RULES"
+    }
 
 
 def _default_rec(classification: str, language: str = "ar") -> str:

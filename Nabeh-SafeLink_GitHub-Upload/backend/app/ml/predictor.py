@@ -151,7 +151,7 @@ def extract_features(raw_url: str) -> dict:
     )
 
     brand_impersonation = int(
-        any(brand in (path + "?" + query).lower() for brand in BRANDS)
+        any(brand in full.lower() for brand in BRANDS)
         and not any(brand == domain_name.lower() for brand in BRANDS)
     )
 
@@ -254,6 +254,13 @@ def predict_url(url: str) -> dict:
         }
 
     ext = _TLD_EXTRACTOR(host)
+    if not ext.suffix and not re.match(r"^(?:\d{1,3}\.){3}\d{1,3}$", host) and host != "localhost":
+        return {
+            "classification": "UNKNOWN",
+            "confidence": 0.5,
+            "source": "INVALID_URL",
+        }
+
     registered_domain = f"{ext.domain}.{ext.suffix}".lower() if ext.domain and ext.suffix else host.lower()
 
     # Check verified safe whitelist

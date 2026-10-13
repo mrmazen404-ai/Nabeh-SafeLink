@@ -21,7 +21,7 @@ def _clean_text(value: str, max_length: int) -> str:
 class GeminiExplanation(BaseModel):
     """Only fields that the UI is allowed to receive from the model."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     summary: str = Field(min_length=1, max_length=600)
     reasons: list[str] = Field(default_factory=list, max_length=5)
@@ -29,15 +29,18 @@ class GeminiExplanation(BaseModel):
     limitations: list[str] = Field(default_factory=list, max_length=5)
     claimed_sender: str = Field(default="غير محددة", max_length=160)
     official_domain: str = Field(default="غير متاح", max_length=253)
+    official_portal_url: str = Field(default="غير متاح", max_length=253)
+    claim_verdict_explanation: str = Field(default="", max_length=300)
+    action_plan_steps: list[str] = Field(default_factory=list, max_length=5)
     lure_type: str = Field(default="غير محدد", max_length=160)
     authenticity_status: str = Field(default="UNKNOWN", max_length=80)
 
-    @field_validator("summary", "recommendation", "claimed_sender", "official_domain", "lure_type", "authenticity_status")
+    @field_validator("summary", "recommendation", "claimed_sender", "official_domain", "official_portal_url", "claim_verdict_explanation", "lure_type", "authenticity_status")
     @classmethod
     def clean_scalar(cls, value: str) -> str:
         return _clean_text(value, 600)
 
-    @field_validator("reasons", "limitations")
+    @field_validator("reasons", "limitations", "action_plan_steps")
     @classmethod
     def clean_lists(cls, values: list[str]) -> list[str]:
         return [_clean_text(item, 300) for item in values if _clean_text(item, 300)]
