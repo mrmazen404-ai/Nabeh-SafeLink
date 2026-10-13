@@ -9,18 +9,18 @@ import './login.css';
 
 async function checkBackendHealth() {
   try {
-    await api.get('/health', { timeout: 2000 });
-    return true;
+    const res = await api.get('/health', { timeout: 2500 });
+    return res.status === 200;
   } catch {
-    // If backend health endpoint fails or times out, proceed gracefully
     return false;
   }
 }
 
 export default function Splash({ onComplete }) {
-  const [stage, setStage] = useState('preparing'); // 'preparing' | 'checking' | 'ready'
+  const [stage, setStage] = useState('preparing'); // 'preparing' | 'checking' | 'ready' | 'offline'
   const [isExiting, setIsExiting] = useState(false);
-  const { t, dir } = useLanguage();
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const { t, dir, lang } = useLanguage();
   const auth = useAuth();
   const onCompleteRef = useRef(onComplete);
 
@@ -28,45 +28,61 @@ export default function Splash({ onComplete }) {
     onCompleteRef.current = onComplete;
   }, [onComplete]);
 
+  // Monitor online / offline status in real time
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Stage 1: Preparation timer
   useEffect(() => {
     let isMounted = true;
-    let fallbackTimer;
 
-    // 1. Minimum preparation delay for smooth visual transition
     const prepareTimer = setTimeout(() => {
-      if (isMounted) setStage('checking');
-    }, 600);
+      if (isMounted) {
+        setStage(navigator.onLine ? 'checking' : 'offline');
+      }
+    }, 500);
 
-    // 2. Hard Fail-safe timeout: Ensure splash transitions to 'ready' within 2200ms max
-    fallbackTimer = setTimeout(() => {
+    // Fail-safe hard timeout: Ensure splash finishes within 2500ms max
+    const failSafeTimer = setTimeout(() => {
       if (isMounted) {
         setStage('ready');
       }
-    }, 2200);
+    }, 2500);
 
     return () => {
       isMounted = false;
       clearTimeout(prepareTimer);
-      clearTimeout(fallbackTimer);
+      clearTimeout(failSafeTimer);
     };
   }, []);
 
-  // Parallel Background Bootstrap Execution during 'checking' stage
+  // Stage 2: Parallel Security Bootstrap & Verification
   useEffect(() => {
     if (stage !== 'checking') return;
 
     let isMounted = true;
 
-    async function runParallelBootstrap() {
+    async function runSecurityBootstrap() {
       const candidateToken = getAccessToken();
 
-      // Parallel Task 1: Backend Health Check
+      // Parallel Task 1: Backend API Health Check
       const healthPromise = checkBackendHealth();
 
-      // Parallel Task 2: Auth Verification Check (if token exists and auth is still checking)
-      const authPromise = candidateToken && auth?.checkAuth ? auth.checkAuth(candidateToken).catch(() => null) : Promise.resolve();
+      // Parallel Task 2: JWT Session Token Verification
+      const authPromise = candidateToken && auth?.checkAuth
+        ? auth.checkAuth(candidateToken).catch(() => null)
+        : Promise.resolve();
 
-      // Run both parallel tasks
       await Promise.allSettled([healthPromise, authPromise]);
 
       if (isMounted) {
@@ -74,14 +90,14 @@ export default function Splash({ onComplete }) {
       }
     }
 
-    runParallelBootstrap();
+    runSecurityBootstrap();
 
     return () => {
       isMounted = false;
     };
   }, [stage, auth]);
 
-  // Transition to 'ready' and trigger exit animation & onComplete callback
+  // Stage 3: Exit transition and completion callback
   useEffect(() => {
     if (stage !== 'ready') return;
 
@@ -89,12 +105,10 @@ export default function Splash({ onComplete }) {
     let timerComplete;
     let isMounted = true;
 
-    // Start fade-out animation
     timerExit = setTimeout(() => {
       if (isMounted) setIsExiting(true);
     }, 250);
 
-    // Invoke onComplete callback to transition navigation
     timerComplete = setTimeout(() => {
       if (isMounted && onCompleteRef.current) {
         onCompleteRef.current();
@@ -109,6 +123,9 @@ export default function Splash({ onComplete }) {
   }, [stage]);
 
   const getStatusText = () => {
+    if (!isOnline || stage === 'offline') {
+      return t('splash.statusOffline') || (lang === 'ar' ? 'تعذر الاتصال بالشبكة. تحقق من اتصالك بالإنترنت...' : 'Network connection unavailable. Please check your internet connection...');
+    }
     switch (stage) {
       case 'ready':
         return t('splash.statusReady');
@@ -176,7 +193,7 @@ export default function Splash({ onComplete }) {
               strokeWidth="2.5"
             />
 
-            {/* Pure Vector Link Icon */}
+            {/* Vector Link Icon */}
             <g
               transform="translate(63, 75) scale(2.25)"
               fill="none"

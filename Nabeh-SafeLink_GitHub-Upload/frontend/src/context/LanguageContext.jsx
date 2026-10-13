@@ -206,11 +206,12 @@ export const translations = {
     },
     splash: {
       tagline: 'افحص • اكتشف • ابقَ آمناً',
-      footer: 'Nabeh SafeLink Security Infrastructure',
+      footer: 'البنية الأمنية الرقمية لـ Nabeh SafeLink — الإصدار المؤسسي المعتمد',
       status: 'جاري تهيئة الحماية...',
-      statusPreparing: 'جاري تهيئة بيئة Nabeh SafeLink...',
-      statusChecking: 'جاري التحقق من أمان الجلسة...',
-      statusReady: 'النظام جاهز، مرحباً بك...'
+      statusPreparing: 'جاري تهيئة بيئة النواة وتشفير الاتصال...',
+      statusChecking: 'جاري التحقق الرقمي من جلسة التوثيق والشبكة...',
+      statusReady: 'اكتمل التحقق أمنياً، مرحباً بك في نبيه SafeLink',
+      statusOffline: 'تعذر الاتصال بالشبكة. تحقق من اتصالك بالإنترنت...'
     },
 
     // FAQ Page (#32)
@@ -747,11 +748,12 @@ export const translations = {
     },
     splash: {
       tagline: 'Scan • Detect • Stay Safe',
-      footer: 'Nabeh SafeLink Security Infrastructure',
+      footer: 'Nabeh SafeLink Digital Security Infrastructure',
       status: 'Preparing your protection...',
-      statusPreparing: 'Preparing your Nabeh SafeLink workspace...',
-      statusChecking: 'Verifying secure session...',
-      statusReady: 'System ready, welcome...'
+      statusPreparing: 'Initializing secure workspace & connection encryption...',
+      statusChecking: 'Verifying digital session token & network security...',
+      statusReady: 'Security verification complete, welcome to Nabeh SafeLink',
+      statusOffline: 'Network connection unavailable. Please check your internet connection...'
     },
 
     // FAQ Page (#32)
