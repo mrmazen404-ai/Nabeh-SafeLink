@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 
 from app.admin.dependencies import ROLE_PERMISSIONS, bearer_token, client_ip, current_admin, require_permissions, require_roles
@@ -268,6 +268,76 @@ def logout_all(http_request: Request, admin: dict = Depends(current_admin)):
 def me(admin: dict = Depends(current_admin)):
     profile = {**admin, "permissions": sorted(ROLE_PERMISSIONS.get(admin.get("role"), frozenset()))}
     return {"success": True, "data": profile}
+
+
+def _count(table_name: str, filters: list[tuple[str, str, object]] | None = None) -> int:
+    query = supabase.table(table_name).select("id", count="exact", head=True)
+    for operator, column, value in filters or []:
+        query = getattr(query, operator)(column, value)
+    result = query.execute()
+    return int(result.count or 0)
+
+
+@router.get("/dashboard/overview")
+def dashboard_overview(
+    range_days: int = Query(30, ge=1, le=90),
+    admin: dict = Depends(require_permissions("dashboard.read")),
+):
+    """Return operational metrics from Supabase without fabricated fallbacks."""
+    del admin
+    period_start = now() - timedelta(days=range_days)
+    period_iso = period_start.isoformat()
+    try:
+        users_period = [("gte", "created_at", period_iso)]
+        scans_period = [("gte", "created_at", period_iso)]
+        feedback_period = [("gte", "created_at", period_iso)]
+        support_period = [("gte", "created_at", period_iso)]
+        audit_period = [("gte", "created_at", period_iso)]
+
+        scan_counts = {
+            "total": _count("scans", scans_period),
+            "completed": _count("scans", scans_period + [("eq", "status", "COMPLETED")]),
+            "failed": _count("scans", scans_period + [("eq", "status", "FAILED")]),
+            "processing": _count("scans", scans_period + [("eq", "status", "PROCESSING")]),
+            "safe": _count("scans", scans_period + [("eq", "classification", "SAFE")]),
+            "suspicious": _count("scans", scans_period + [("eq", "classification", "SUSPICIOUS")]),
+            "dangerous": _count("scans", scans_period + [("eq", "classification", "DANGEROUS")]),
+            "unknown": _count("scans", scans_period + [("eq", "classification", "UNKNOWN")]),
+            "needs_review": _count("scans", scans_period + [("eq", "classification", "NEEDS_REVIEW")]),
+        }
+        recent_audit = supabase.table("admin_audit_logs").select(
+            "id,action,resource_type,resource_id,created_at,admin_user_id"
+        ).gte("created_at", period_iso).order("created_at", desc=True).limit(8).execute()
+        data = {
+            "range_days": range_days,
+            "period_start": period_iso,
+            "generated_at": now().isoformat(),
+            "users": {
+                "total": _count("custom_users"),
+                "active": _count("custom_users", [("eq", "status", "ACTIVE")]),
+                "suspended": _count("custom_users", [("eq", "status", "SUSPENDED")]),
+                "new": _count("custom_users", users_period),
+            },
+            "scans": scan_counts,
+            "feedback": {
+                "total": _count("feedback", feedback_period),
+                "new": _count("feedback", feedback_period + [("eq", "status", "NEW")]),
+                "reviewed": _count("feedback", feedback_period + [("eq", "status", "REVIEWED")]),
+            },
+            "support": {
+                "open": _count("support_requests", [("eq", "status", "OPEN")]),
+                "in_progress": _count("support_requests", [("eq", "status", "IN_PROGRESS")]),
+                "urgent_open": _count("support_requests", [("eq", "status", "OPEN"), ("eq", "priority", "URGENT")]),
+                "new": _count("support_requests", support_period),
+            },
+            "audit": {
+                "period_events": _count("admin_audit_logs", audit_period),
+                "recent": recent_audit.data or [],
+            },
+        }
+        return {"success": True, "data": data}
+    except Exception:
+        raise HTTPException(status_code=503, detail="تعذر تحميل مؤشرات Dashboard من قاعدة البيانات") from None
 
 
 @router.get("/sessions")
