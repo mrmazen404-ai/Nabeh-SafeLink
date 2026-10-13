@@ -28,12 +28,6 @@ export default function BottomNav({ activeTab, setActiveTab, isGuest = false }) 
           </button>
         );
       })}
-      <style>{`
-        .mobile-bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--color-bg); border-top: 1px solid var(--color-border); display: flex; justify-content: space-around; padding: 8px 0 10px; box-shadow: var(--shadow-sm); z-index: 100; }
-        .mobile-nav-item { background: none; border: none; border-top: 2px solid transparent; display: flex; flex-direction: column; align-items: center; gap: 4px; font-family: inherit; font-size: 12px; font-weight: 500; color: var(--color-text-muted); cursor: pointer; padding: 6px 16px; border-radius: 6px; transition: all 150ms ease; }
-        .mobile-nav-item.active { background: var(--color-bg-subtle); border-top-color: var(--color-secondary); color: var(--color-text); font-weight: 600; }
-        @media (min-width: 768px) { .mobile-bottom-nav { display: none !important; } }
-      `}</style>
     </nav>
   );
 }

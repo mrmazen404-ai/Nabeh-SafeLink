@@ -727,3 +727,45 @@ a:focus-visible {
     opacity: 0;
   }
 }
+
+/* Phase 6: shared navigation scale for desktop and mobile. */
+.app-header-container { gap: clamp(8px, 2vw, 20px); }
+.header-actions { min-width: 0; gap: clamp(5px, 1vw, 10px); }
+.header-user-group { min-width: 0; gap: clamp(5px, 1vw, 8px); }
+.header-preference-btn, .header-login-btn, .header-logout-btn { min-height: var(--touch-target); height: var(--touch-target); }
+.header-username { max-width: clamp(84px, 12vw, 150px); }
+
+body .mobile-bottom-nav {
+  min-height: 68px;
+  padding: 8px max(8px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom));
+  gap: clamp(2px, 2vw, 10px);
+  background: color-mix(in srgb, var(--color-bg) 94%, transparent);
+  backdrop-filter: blur(14px);
+}
+body .mobile-nav-item {
+  min-width: 0;
+  min-height: var(--touch-target);
+  flex: 1 1 0;
+  padding: 6px clamp(6px, 3vw, 16px);
+  gap: 3px;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+}
+body .mobile-nav-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 760px) {
+  .app-header-container { padding-inline: clamp(12px, 3vw, 20px); }
+  .header-brand { min-width: 0; }
+  .header-actions { flex-shrink: 1; }
+  .header-preference-btn, .header-login-btn, .header-logout-btn { min-width: var(--touch-target); padding-inline: 9px; }
+  .header-login-btn, .header-logout-btn { font-size: var(--text-xs); }
+  .header-logout-btn { max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
+  .app-container:has(.mobile-bottom-nav) { padding-bottom: 76px; }
+}
+
+@media (max-width: 380px) {
+  .app-header-container { padding-inline: 10px; gap: 5px; }
+  .header-actions { gap: 4px; }
+  .header-login-btn, .header-logout-btn { max-width: 54px; padding-inline: 6px; }
+}
