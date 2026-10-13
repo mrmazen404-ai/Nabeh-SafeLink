@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { ShieldCheckIcon } from './Icons';
 import { useLanguage } from '../context/LanguageContext';
 import '../styles/loading.css';
@@ -6,8 +6,9 @@ import '../styles/loading.css';
 export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
   const { t, dir, lang } = useLanguage();
   const [messageIndex, setMessageIndex] = useState(0);
-  const [progress, setProgress] = useState(10);
+  const [progress, setProgress] = useState(5);
   const [showTimeoutNotice, setShowTimeoutNotice] = useState(false);
+  const startTimeRef = useRef(Date.now());
 
   const isText = scanType === 'TEXT';
 
@@ -41,19 +42,21 @@ export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
     return t('loading.messages') || defaultMessages;
   }, [isText, lang, t]);
 
-  // Smoothly increment progress percentage
+  // Deterministic, fixed-rate progress increment based on elapsed clock time (independent of CPU speed)
   useEffect(() => {
+    startTimeRef.current = Date.now();
+    const TARGET_DURATION_MS = 8000; // 8 seconds to reach 92% linearly
+
     const timer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 92) return 92;
-        return prev + Math.floor(Math.random() * 8 + 3);
-      });
-    }, 280);
+      const elapsed = Date.now() - startTimeRef.current;
+      const calculated = Math.min(92, Math.floor(5 + (elapsed / TARGET_DURATION_MS) * 87));
+      setProgress(calculated);
+    }, 100);
 
     return () => clearInterval(timer);
   }, []);
 
-  // Cycle messages
+  // Cycle messages on fixed clock interval
   useEffect(() => {
     if (messages.length <= 1) return undefined;
 
@@ -64,7 +67,7 @@ export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
     return () => clearInterval(interval);
   }, [messages.length]);
 
-  // Timeout guard after 22s if network hangs
+  // Timeout guard after 22s
   useEffect(() => {
     const timeoutTimer = setTimeout(() => {
       setShowTimeoutNotice(true);
@@ -81,13 +84,13 @@ export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
       </div>
 
       <div className="loading-content fade-in">
-        {/* Dynamic Animated SVG Spinner Wrapper */}
+        {/* Constant-Speed Linear Animated SVG Spinner Wrapper */}
         <div className="loading-spinner-wrapper">
           <svg className="loading-svg-spinner" viewBox="0 0 120 120" width="120" height="120">
             {/* Background static circle */}
             <circle cx="60" cy="60" r="52" fill="none" stroke="var(--color-border)" strokeWidth="4" opacity="0.3" />
 
-            {/* Outer spinning gradient ring */}
+            {/* Outer spinning gradient ring (Strict linear constant speed) */}
             <circle
               cx="60"
               cy="60"
@@ -134,7 +137,7 @@ export default function LoadingScreen({ url, scanType = 'URL', onCancel }) {
           {messages[messageIndex]}
         </p>
 
-        {/* VISUAL REAL-TIME PROGRESS BAR */}
+        {/* VISUAL FIXED-RATE PROGRESS BAR */}
         <div className="loading-progress-box">
           <div className="loading-progress-header">
             <span>{lang === 'ar' ? 'نسبة إنجاز الفحص:' : 'Scan Progress:'}</span>
