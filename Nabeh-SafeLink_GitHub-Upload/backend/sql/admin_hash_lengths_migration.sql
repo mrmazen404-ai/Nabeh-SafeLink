@@ -192,12 +192,17 @@ where table_schema = 'public'
 order by table_name, column_name;
 
 select
-  tablename,
-  rowsecurity,
-  forcerowsecurity
-from pg_tables
-where schemaname = 'public'
-  and tablename in (
+  p.tablename,
+  p.rowsecurity,
+  c.relforcerowsecurity as forcerowsecurity
+from pg_tables p
+join pg_class c
+  on c.relname = p.tablename
+join pg_namespace n
+  on n.oid = c.relnamespace
+ and n.nspname = p.schemaname
+where p.schemaname = 'public'
+  and p.tablename in (
     'admin_users',
     'admin_sessions',
     'admin_2fa_methods',
@@ -207,4 +212,4 @@ where schemaname = 'public'
     'admin_audit_logs',
     'admin_notifications'
   )
-order by tablename;
+order by p.tablename;
