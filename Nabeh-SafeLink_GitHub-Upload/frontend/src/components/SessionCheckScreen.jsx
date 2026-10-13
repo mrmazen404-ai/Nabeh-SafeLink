@@ -158,7 +158,8 @@ export default function SessionCheckScreen({ onComplete }) {
     return () => {
       isMounted = false;
     };
-  }, [checkAuth, token, user, lang, onComplete]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const securityLabelText = lang === 'ar' ? 'توثيق نابه الآمن' : 'Nabeh Secure Authentication';
 
