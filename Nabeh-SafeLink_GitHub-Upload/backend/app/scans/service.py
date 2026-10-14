@@ -1,5 +1,6 @@
 """Scan processing with strict guest isolation and explicit UNKNOWN outcomes."""
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from app.gemini.client import generate_explanation, analyze_sms_message
 from app.ml.predictor import predict_url
 from app.virustotal.client import check_url_virustotal
 from app.dashboard.realtime import manager
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -288,12 +290,18 @@ class ScanService:
         combined["evidence"] = {"ml": ml_result, "virustotal": vt_result, "input_type": "URL"}
 
         try:
-            explanation = await generate_explanation(
-                input_value=target_url,
-                classification=combined["classification"],
-                evidence=combined.get("evidence", {}),
-                language=language,
+            explanation = await asyncio.wait_for(
+                generate_explanation(
+                    input_value=target_url,
+                    classification=combined["classification"],
+                    evidence=combined.get("evidence", {}),
+                    language=language,
+                ),
+                timeout=settings.SCAN_AI_TIMEOUT_SECONDS,
             )
+        except asyncio.TimeoutError:
+            logger.warning("url_gemini_timeout")
+            explanation = cls._local_explanation(combined["classification"], language)
         except Exception:
             logger.exception("url_gemini_failed")
             explanation = cls._local_explanation(combined["classification"], language)
@@ -377,12 +385,37 @@ class ScanService:
         }
 
         # 100% Gemini AI-driven SMS context & intent analysis via API
-        ai_analysis = await analyze_sms_message(
-            text_content=text_content,
-            extracted_url=extracted_url,
-            evidence=evidence,
-            language=language,
-        )
+        try:
+            ai_analysis = await asyncio.wait_for(
+                analyze_sms_message(
+                    text_content=text_content,
+                    extracted_url=extracted_url,
+                    evidence=evidence,
+                    language=language,
+                ),
+                timeout=settings.SCAN_AI_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("sms_gemini_timeout")
+            local_text = cls.analyze_text_phishing(text_content, bool(extracted_url))
+            fallback_classification = combined["classification"] if extracted_url else local_text["classification"]
+            ai_analysis = {
+                **cls._local_explanation(fallback_classification, language),
+                "classification": fallback_classification,
+                "confidence": local_text.get("confidence") or combined.get("confidence"),
+                "fraud_probability": 0.95 if fallback_classification == "DANGEROUS" else 0.55 if fallback_classification == "SUSPICIOUS" else 0.05,
+                "provider": "LOCAL_TIMEOUT_FALLBACK",
+            }
+        except Exception:
+            logger.exception("sms_gemini_failed")
+            local_text = cls.analyze_text_phishing(text_content, bool(extracted_url))
+            fallback_classification = combined["classification"] if extracted_url else local_text["classification"]
+            ai_analysis = {
+                **cls._local_explanation(fallback_classification, language),
+                "classification": fallback_classification,
+                "confidence": local_text.get("confidence") or combined.get("confidence"),
+                "provider": "LOCAL_ERROR_FALLBACK",
+            }
 
         classification = ai_analysis.get("classification", combined.get("classification", "UNKNOWN"))
         confidence = float(ai_analysis.get("confidence") or combined.get("confidence") or 0.85)
