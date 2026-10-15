@@ -50,8 +50,8 @@ class ScanService:
             classification, confidence = ("DANGEROUS", 0.90) if has_embedded_url else ("SUSPICIOUS", 0.75)
         elif len(matches) >= 1:
             classification, confidence = ("DANGEROUS", 0.85) if has_embedded_url else ("SUSPICIOUS", 0.65)
-        elif has_safe_greeting or (not has_embedded_url and len(text.strip()) <= 120):
-            # Safe everyday greetings or normal short messages with no phishing keywords are SAFE 100%
+        elif not has_embedded_url and (has_safe_greeting or len(text.strip()) <= 120):
+            # Safe everyday greetings or normal short messages with NO embedded URL are SAFE 100%
             classification, confidence = "SAFE", 0.99
         else:
             classification, confidence = "UNKNOWN", None

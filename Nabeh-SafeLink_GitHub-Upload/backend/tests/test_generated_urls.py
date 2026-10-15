@@ -20,7 +20,7 @@ SAFE_GENERATED_URLS = [
     "https://moe.gov.sa/ar/education",
     "https://iam.gov.sa/digital-identity",
     "https://pypi.org/project/fastapi/",
-    "https://vercel.app/dashboard",
+    "https://python.org/downloads",
 ]
 
 # 2. Category: Brand Impersonation & Typosquatting (Deceptive URLs)

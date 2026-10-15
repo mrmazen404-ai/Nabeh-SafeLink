@@ -364,7 +364,7 @@ def users(
         count="exact",
     )
     if search:
-        safe_search = search.strip().replace("%", "").replace("_", "").replace(",", "")
+        safe_search = __import__("re").sub(r"[^A-Za-z0-9@ \u0600-\u06FF-]", "", search.strip())
         if safe_search:
             query = query.or_(f"email.ilike.%{safe_search}%,display_name.ilike.%{safe_search}%")
     if status:

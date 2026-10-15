@@ -36,7 +36,7 @@ TOP_SAFE_DOMAINS = {
     "x.com", "instagram.com", "facebook.com", "whatsapp.com", "telegram.org",
     "openai.com", "gov.sa", "edu.sa", "nic.sa", "moe.gov.sa", "moi.gov.sa",
     "salla.sa", "zid.sa", "stc.com.sa", "mobily.com.sa", "alrajhibank.com.sa",
-    "snb.com.sa", "pypi.org", "npmjs.com", "python.org", "vercel.app",
+    "snb.com.sa", "pypi.org", "npmjs.com", "python.org",
 }
 # Preferred model is retrained LightGBM model, falling back to original model
 RETRAINED_MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model_retrained.joblib")
