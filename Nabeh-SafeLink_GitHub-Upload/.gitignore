@@ -14,6 +14,10 @@ venv/
 frontend/node_modules/
 admin_frontend/node_modules/
 
+# Generated frontend deployment artifacts; Vercel rebuilds these on every deploy.
+frontend/dist/
+public/
+
 # Generated deployment bundle; regenerate it during release packaging
 backend_bundle.zip
 
