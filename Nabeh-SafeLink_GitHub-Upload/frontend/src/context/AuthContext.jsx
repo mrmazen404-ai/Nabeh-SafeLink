@@ -50,16 +50,8 @@ export function AuthProvider({ children }) {
       setStatus('authenticated');
       return authenticatedUser;
     } catch (error) {
-      if (error?.response?.status === 401) {
-        clearLocalSession(setUser, setToken, setStatus);
-        setStatus('guest');
-      } else if (error?.code === 'ERR_NETWORK' || !error?.response) {
-        // Network offline / connection error during checkAuth: retain token, don't wipe session
-        setStatus('authenticated');
-      } else {
-        clearLocalSession(setUser, setToken, setStatus);
-        setStatus('guest');
-      }
+      clearLocalSession(setUser, setToken, setStatus);
+      setStatus('guest');
       throw error;
     }
   }, [user, token, status]);

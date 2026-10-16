@@ -84,49 +84,6 @@ function LoadingRoute() {
   return <SessionCheckScreen />;
 }
 
-function OfflineBanner() {
-  const [isOffline, setIsOffline] = useState(() => (typeof navigator !== 'undefined' ? !navigator.onLine : false));
-
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  if (!isOffline) return null;
-
-  const isAr = document.documentElement.lang === 'ar' || document.documentElement.dir === 'rtl';
-
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      zIndex: 99999,
-      background: '#DC2626',
-      color: '#ffffff',
-      padding: '10px 16px',
-      textAlign: 'center',
-      fontSize: '13px',
-      fontWeight: '700',
-      boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '8px'
-    }}>
-      <span>⚠️</span>
-      <span>{isAr ? 'انقطع الاتصال بالإنترنت. يرجى التحقق من شبكتك.' : 'Internet connection lost. Please check your network.'}</span>
-    </div>
-  );
-}
-
 function ProtectedRoute() {
   const { isGuest, loading } = useAuth();
   const location = useLocation();
@@ -167,7 +124,6 @@ function NavigationLayout({ initialScanUrl, onQuickScan, onClearInitial, onNavig
 
   return (
     <div className="app-container">
-      <OfflineBanner />
       <Outlet context={{ activeTab, setActiveTab, isGuest, onNavigateAuth, onQuickScan: handleQuickScan, initialScanUrl, onClearInitial }} />
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} isGuest={isGuest} />
     </div>
@@ -287,7 +243,6 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
           <Route path="/terms" element={<RoutedPage component={LegalDocument} type="terms" />} />
           <Route path="/privacy" element={<RoutedPage component={LegalDocument} type="privacy" />} />
           <Route path="/disclaimer" element={<RoutedPage component={LegalDocument} type="disclaimer" />} />
-          <Route path="/404" element={<RoutedPage component={ErrorPage} type="404" onNavigate={navigateFromPage} />} />
         </Route>
         <Route path="/welcome" element={<WelcomePage />} />
         <Route path="/onboarding" element={<OnboardingRoute />} />
@@ -320,6 +275,7 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
         </Route>
       </Route>
 
+      <Route path="/404" element={<ErrorPage type="404" onNavigate={navigateFromPage} />} />
       <Route path="*" element={<Navigate to="/404" replace />} />
     </Routes>
   );

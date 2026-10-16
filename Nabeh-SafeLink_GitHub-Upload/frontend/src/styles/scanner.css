@@ -414,27 +414,19 @@
 }
 
 @media (max-width: 560px) {
-  .scanner-page .page-container { padding-inline: 12px; padding-top: 12px; padding-bottom: 20px; }
-  .scanner-input-card, .recent-section { padding: 18px 14px !important; border-radius: 16px; }
+  .scanner-page .page-container { padding-inline: var(--content-gutter); }
+  .scanner-input-card, .recent-section { padding: clamp(18px, 5vw, 24px) !important; border-radius: clamp(18px, 5vw, 24px); }
   .scanner-desktop-grid:has(> :only-child) .scanner-input-card { min-height: auto; justify-content: flex-start; }
-  .scanner-hero-row { gap: 10px; margin-bottom: 14px; }
-  .scanner-hero-mark { width: 42px; height: 42px; border-radius: 12px; }
-  .scanner-title { font-size: 20px; margin-bottom: 4px; }
-  .scanner-subtitle { font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
-  .scanner-trust-row { gap: 4px; margin-bottom: 12px; }
-  .scanner-trust-row span { font-size: 10px; padding: 4px 8px; flex: 1 1 auto; justify-content: center; }
-  .scanner-input-wrapper { margin-top: 12px; margin-bottom: 12px; }
-  .scanner-input { min-height: 46px; padding-inline-start: 80px; font-size: 13px; }
-  .input-action-btn { min-height: 32px; padding-inline: 10px; font-size: 11px; }
-  .scanner-button { min-height: 46px; font-size: 14px; }
-  .recent-section { padding: 16px 14px !important; }
-  .recent-item { padding: 10px 12px; border-radius: 12px; }
+  .scanner-hero-row { gap: 10px; }
+  .scanner-trust-row { gap: 6px; }
+  .scanner-trust-row span { flex: 1 1 auto; justify-content: center; min-width: 0; }
+  .scanner-input { padding-inline-start: 88px; }
+  .input-action-btn { max-width: 31%; }
 }
 
-@media (max-width: 380px) {
-  .scanner-page .page-container { padding-inline: 10px; }
-  .scanner-input-card, .recent-section { padding-inline: 12px !important; }
-  .scanner-title { font-size: 18px; }
-  .scanner-subtitle { font-size: 12px; }
+@media (max-width: 340px) {
+  .scanner-page .page-container { padding-inline: 12px; }
+  .scanner-input-card, .recent-section { padding-inline: 15px !important; }
+  .scanner-title { font-size: 23px; }
   .scanner-trust-row span { font-size: 9px; padding-inline: 5px; }
 }

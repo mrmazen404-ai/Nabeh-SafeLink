@@ -81,11 +81,7 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
         setError(t('scanner.errScanFailed'));
       }
     } catch (err) {
-      const serverDetail = err?.response?.data?.detail;
-      const message = err?.code === 'ECONNABORTED'
-        ? (lang === 'ar' ? 'انتهت مهلة الفحص. أعد المحاولة بعد لحظات.' : 'The scan timed out. Please try again shortly.')
-        : serverDetail || t('scanner.errServerConnection');
-      setError(message);
+      setError(t('scanner.errServerConnection'));
     } finally {
       setLoading(false);
     }
