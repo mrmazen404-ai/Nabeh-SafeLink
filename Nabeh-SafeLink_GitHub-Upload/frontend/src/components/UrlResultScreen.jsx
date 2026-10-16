@@ -72,6 +72,9 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
   const ml = result?.ml_model || {};
   const exp = result?.explanation || {};
   const targetUrl = result?.extracted_url || result?.input_value || '';
+  const mlSource = String(ml.source || '').toUpperCase();
+  const hasUsableMlResult = Number.isFinite(ml.phishing_prob)
+    && !['ML_ERROR', 'MODEL_UNAVAILABLE'].includes(mlSource);
 
   const totalEngines = vt.total_engines || 0;
   const maliciousPct = totalEngines > 0 ? ((vt.malicious || 0) / totalEngines) * 100 : 0;
@@ -86,7 +89,23 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const sourceLabel = result?.source ? t('result.sourceLabel', { source: result.source }) : t('result.hybridSource');
+  const sourceLabel = (() => {
+    const source = String(result?.source || '').toUpperCase();
+    if (source === 'VERIFIED_SAFE_DOMAIN') return lang === 'ar' ? 'نطاق موثوق' : 'Trusted domain';
+    if (source === 'INSUFFICIENT_EVIDENCE') return lang === 'ar' ? 'أدلة غير حاسمة' : 'Inconclusive evidence';
+    if (source.startsWith('ML_')) return lang === 'ar' ? 'تحليل أمني متاح' : 'Available security analysis';
+    if (source.includes('VIRUSTOTAL') || source.includes('HYBRID')) return lang === 'ar' ? 'تحليل متعدد المصادر' : 'Multi-source analysis';
+    return t('result.hybridSource');
+  })();
+
+  const providerLabel = (() => {
+    const provider = String(exp.provider || '').toUpperCase();
+    if (provider.includes('LOCAL') || provider.includes('FALLBACK') || provider.includes('RULES')) {
+      return lang === 'ar' ? 'تحليل أمني احتياطي' : 'Safe fallback analysis';
+    }
+    if (provider.includes('GEMINI')) return t('result.aiModelTag');
+    return lang === 'ar' ? 'تحليل أمني' : 'Security analysis';
+  })();
 
   return (
     <div className="result-page url-result-theme" dir={dir}>
@@ -148,7 +167,7 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
                     <SparklesIcon size={18} color="var(--color-secondary)" />
                     <span>{lang === 'ar' ? 'تقرير الذكاء الاصطناعي والأبحاث الميدانية (Gemini Research):' : 'AI Research & Intelligence Report:'}</span>
                   </h3>
-                  <span className="gemini-tag">{exp.provider || t('result.aiModelTag')}</span>
+                  <span className="gemini-tag">{providerLabel}</span>
                 </div>
 
                 <p className="explanation-text">{exp.summary}</p>
@@ -216,7 +235,7 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
             )}
 
             {/* LightGBM Model Prediction Details */}
-            {ml.classification && (
+            {ml.classification && hasUsableMlResult && (
               <div className="card ml-details-block">
                 <div className="ml-header">
                   <CpuIcon size={18} color="var(--color-secondary)" />
@@ -231,9 +250,7 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
                   </div>
                   <div className="ml-stat">
                     <span className="ml-stat-val" dir="ltr">
-                      {Number.isFinite(ml.phishing_prob)
-                        ? t('result.mlRiskProb', { prob: (ml.phishing_prob * 100).toFixed(1) })
-                        : (lang === 'ar' ? 'النموذج غير متاح' : 'Model Unavailable')}
+                      {t('result.mlRiskProb', { prob: (ml.phishing_prob * 100).toFixed(1) })}
                     </span>
                   </div>
                 </div>

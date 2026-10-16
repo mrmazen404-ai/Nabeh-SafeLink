@@ -37,7 +37,14 @@ export default function Comparison({ activeTab, setActiveTab, onNavigateAuth }) 
       const result = await compareScans(selected);
       setComparison(result.data || []);
     } catch (err) {
-      setError(err?.response?.data?.detail || t('comparison.failError'));
+      const status = err?.response?.status;
+      setError(
+        status === 401
+          ? (lang === 'ar' ? 'انتهت جلستك. سجّل الدخول ثم أعد المحاولة.' : 'Your session has expired. Please sign in and try again.')
+          : status === 422
+            ? t('comparison.minError')
+            : t('comparison.failError'),
+      );
     }
   };
 

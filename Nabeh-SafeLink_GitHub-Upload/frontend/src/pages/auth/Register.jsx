@@ -72,9 +72,14 @@ export default function Register({ onNavigate }) {
       setSuccessMsg(response.message || t('auth.registerSuccessDefault'));
       timerRef.current = setTimeout(() => onNavigate('verify-otp', { email: email.trim() }), 1800);
     } catch (requestError) {
-      const serverDetail = requestError?.response?.data?.detail;
       const status = requestError?.response?.status;
-      setError(serverDetail || (status === 503 ? t('auth.emailDeliveryError') : t('auth.registerError')));
+      setError(
+        status === 503
+          ? t('auth.emailDeliveryError')
+          : status === 429
+            ? (dir === 'rtl' ? 'تم تجاوز حد محاولات التسجيل مؤقتًا. حاول لاحقًا.' : 'Registration attempts are temporarily limited. Please try again later.')
+            : t('auth.registerError'),
+      );
     } finally {
       setLoading(false);
     }

@@ -81,10 +81,18 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
         setError(t('scanner.errScanFailed'));
       }
     } catch (err) {
-      const serverDetail = err?.response?.data?.detail;
+      const status = err?.response?.status;
       const message = err?.code === 'ECONNABORTED'
-        ? (lang === 'ar' ? 'انتهت مهلة الفحص. أعد المحاولة بعد لحظات.' : 'The scan timed out. Please try again shortly.')
-        : serverDetail || t('scanner.errServerConnection');
+        ? (lang === 'ar' ? 'استغرق الفحص وقتًا أطول من المتوقع. أعد المحاولة بعد لحظات.' : 'The scan took longer than expected. Please try again shortly.')
+        : status === 400 || status === 422
+          ? (lang === 'ar' ? 'تحقق من البيانات المدخلة ثم حاول مرة أخرى.' : 'Please check the entered content and try again.')
+          : status === 401
+            ? (lang === 'ar' ? 'انتهت جلستك. سجّل الدخول ثم أعد المحاولة.' : 'Your session has expired. Please sign in and try again.')
+            : status === 429
+              ? (lang === 'ar' ? 'تم الوصول إلى حد الفحوصات مؤقتًا. أعد المحاولة لاحقًا.' : 'The scan limit was reached temporarily. Please try again later.')
+              : status >= 500
+                ? (lang === 'ar' ? 'خدمة الفحص غير متاحة مؤقتًا. حاول مرة أخرى بعد قليل.' : 'The scanning service is temporarily unavailable. Please try again shortly.')
+                : t('scanner.errServerConnection');
       setError(message);
     } finally {
       setLoading(false);
@@ -151,7 +159,7 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
         )}
 
         {/* Desktop 2-Column Grid */}
-        <div className="scanner-desktop-grid">
+        <div className={`scanner-desktop-grid ${isGuest ? 'is-single' : 'is-split'}`}>
           {/* Main Input Panel */}
           <div>
             {/* Toggle Mode URL vs TEXT */}
@@ -178,8 +186,8 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
                   <span className="scanner-hero-shield"><CheckCircleIcon size={22} color="#FFFFFF" /></span>
                 </div>
                 <div className="scanner-hero-copy">
-                  <span className="scanner-kicker">{dir === 'rtl' ? 'مركز نابح للحماية الذكية' : 'NABEH SECURE WORKSPACE'}</span>
-                  <span className="scanner-live-status"><i />{dir === 'rtl' ? 'حماية نشطة ومراقبة فورية' : 'Live protection enabled'}</span>
+                  <span className="scanner-kicker">{t('scanner.workspace')}</span>
+                  <span className="scanner-live-status"><i />{t('scanner.liveProtection')}</span>
                 </div>
               </div>
               <h1 className="scanner-title">{t('scanner.pageTitle')}</h1>
@@ -188,10 +196,10 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
                   ? t('scanner.subUrl')
                   : t('scanner.subText')}
               </p>
-              <div className="scanner-trust-row" aria-label={dir === 'rtl' ? 'مزايا الفحص' : 'Scan capabilities'}>
-                <span><CheckCircleIcon size={14} />{dir === 'rtl' ? 'تحليل بالذكاء الاصطناعي' : 'AI analysis'}</span>
-                <span><CheckCircleIcon size={14} />{dir === 'rtl' ? 'فحص متعدد المصادر' : 'Multi-source scan'}</span>
-                <span><CheckCircleIcon size={14} />{dir === 'rtl' ? 'خصوصية أولاً' : 'Privacy first'}</span>
+              <div className="scanner-trust-row" aria-label={t('scanner.capabilities')}>
+                <span><CheckCircleIcon size={14} />{t('scanner.aiAnalysis')}</span>
+                <span><CheckCircleIcon size={14} />{t('scanner.multiSource')}</span>
+                <span><CheckCircleIcon size={14} />{t('scanner.privacyFirst')}</span>
               </div>
 
               <div className="scanner-input-wrapper">

@@ -357,7 +357,7 @@
 @media (max-width: 560px) { .scanner-hero-row { margin-bottom: 20px; } .scanner-hero-mark { width: 46px; height: 46px; border-radius: 14px; } .scanner-kicker { font-size: 10px; } .scanner-trust-row span { font-size: 9px; padding-inline: 7px; } }
 
 @media (min-width: 900px) {
-  .scanner-desktop-grid:has(> :only-child) { grid-template-columns: minmax(0, 760px); justify-content: center; }
+  .scanner-desktop-grid.is-single { grid-template-columns: minmax(0, 760px); justify-content: center; }
 }
 
 /* Full-viewport responsive layout */
@@ -365,22 +365,22 @@
 .scanner-page .page-container { width: 100%; max-width: none; min-height: calc(100dvh - 70px); margin: 0; padding-inline: clamp(14px, 4vw, 64px); padding-top: clamp(18px, 3vw, 36px); padding-bottom: clamp(24px, 4vw, 56px); display: flex; flex-direction: column; }
 .scanner-desktop-grid { width: 100%; flex: 1; grid-template-columns: minmax(0, 1fr); align-items: stretch; }
 .scanner-desktop-grid > * { min-width: 0; }
-.scanner-desktop-grid:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
-.scanner-desktop-grid:has(> :only-child) > div { display: flex; flex-direction: column; }
-.scanner-desktop-grid:has(> :only-child) .scanner-input-card { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: clamp(430px, calc(100dvh - 250px), 720px); }
+.scanner-desktop-grid.is-single { grid-template-columns: minmax(0, 1fr); }
+.scanner-desktop-grid.is-single > div { display: flex; flex-direction: column; }
+.scanner-desktop-grid.is-single .scanner-input-card { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: clamp(430px, calc(100dvh - 250px), 720px); }
 .scanner-input-card { width: 100%; }
 @media (min-width: 900px) {
   .scanner-desktop-grid { grid-template-columns: minmax(0, 1.55fr) minmax(300px, .8fr); gap: clamp(24px, 4vw, 64px); }
-  .scanner-desktop-grid:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
-  .scanner-desktop-grid:has(> :only-child) .scanner-input-card { min-height: clamp(500px, calc(100dvh - 260px), 760px); padding-inline: clamp(32px, 9vw, 150px); }
+  .scanner-desktop-grid.is-single { grid-template-columns: minmax(0, 1fr); }
+  .scanner-desktop-grid.is-single .scanner-input-card { min-height: clamp(500px, calc(100dvh - 260px), 760px); padding-inline: clamp(32px, 9vw, 150px); }
 }
 @media (max-width: 899px) {
   .scanner-page .page-container { min-height: calc(100dvh - 58px); }
-  .scanner-desktop-grid:has(> :only-child) .scanner-input-card { min-height: calc(100dvh - 260px); }
+  .scanner-desktop-grid.is-single .scanner-input-card { min-height: calc(100dvh - 260px); }
 }
 @media (max-width: 560px) {
   .scanner-page .page-container { padding-inline: 12px; padding-top: 14px; padding-bottom: 24px; }
-  .scanner-desktop-grid:has(> :only-child) .scanner-input-card { min-height: calc(100dvh - 245px); padding: 24px 18px !important; }
+  .scanner-desktop-grid.is-single .scanner-input-card { min-height: calc(100dvh - 245px); padding: 24px 18px !important; }
 }
 
 /* Phase 4: unified fluid Scanner layout, preserving URL/TEXT and recent scans. */
@@ -416,7 +416,7 @@
 @media (max-width: 560px) {
   .scanner-page .page-container { padding-inline: var(--content-gutter); }
   .scanner-input-card, .recent-section { padding: clamp(18px, 5vw, 24px) !important; border-radius: clamp(18px, 5vw, 24px); }
-  .scanner-desktop-grid:has(> :only-child) .scanner-input-card { min-height: auto; justify-content: flex-start; }
+  .scanner-desktop-grid.is-single .scanner-input-card { min-height: auto; justify-content: flex-start; }
   .scanner-hero-row { gap: 10px; }
   .scanner-trust-row { gap: 6px; }
   .scanner-trust-row span { flex: 1 1 auto; justify-content: center; min-width: 0; }
@@ -447,4 +447,18 @@
   .recent-section{padding:16px!important}
   .recent-item{align-items:flex-start!important;padding:12px 0!important}
   .recent-url{white-space:normal!important;overflow-wrap:anywhere}
+}
+
+
+/* Explicit state classes are the primary layout path. */
+.scanner-desktop-grid.is-single { grid-template-columns: minmax(0, 1fr); }
+.scanner-desktop-grid.is-single .scanner-input-card { min-height: clamp(430px, calc(100dvh - 250px), 720px); }
+@media (min-width: 900px) {
+  .scanner-desktop-grid.is-single .scanner-input-card { min-height: clamp(500px, calc(100dvh - 260px), 760px); padding-inline: clamp(32px, 9vw, 150px); }
+}
+@media (max-width: 899px) {
+  .scanner-desktop-grid.is-single .scanner-input-card { min-height: auto; }
+}
+@media (max-width: 560px) {
+  .scanner-desktop-grid.is-single .scanner-input-card { min-height: auto; padding: 24px 18px !important; }
 }

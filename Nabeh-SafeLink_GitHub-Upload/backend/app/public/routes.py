@@ -3,17 +3,30 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.db.supabase_client import supabase
+from app.security.guest_rate_limit import UpstashRateLimiter, client_identity
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/public", tags=["Public metrics"])
+_metrics_limiter = UpstashRateLimiter(
+    limit=int(os.getenv("NABEH_PUBLIC_METRICS_RATE_LIMIT", "30")),
+    window_seconds=int(os.getenv("NABEH_PUBLIC_METRICS_RATE_WINDOW_SECONDS", "60")),
+    fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true").lower() in {"1", "true", "yes"},
+)
+
+
+async def enforce_metrics_rate_limit(request: Request) -> None:
+    decision = await _metrics_limiter.check(client_identity(request))
+    if not decision.allowed:
+        raise HTTPException(status_code=429, detail="طلبات الإحصائيات مرتفعة مؤقتاً. حاول لاحقاً.", headers={"Retry-After": str(decision.retry_after or 60), "Cache-Control": "no-store"})
 
 
 class VisitEvent(BaseModel):
@@ -22,52 +35,40 @@ class VisitEvent(BaseModel):
 
 
 def _visitor_hash(visitor_id: str) -> str:
-    salt = settings.VISITOR_HASH_SALT or settings.AUTH_JWT_SECRET or "nabeh_default_visitor_salt"
+    salt = settings.VISITOR_HASH_SALT
+    if not salt or len(salt) < 32:
+        raise HTTPException(status_code=503, detail="Visitor metrics are not configured")
     return hashlib.sha256(f"{salt}:{visitor_id}".encode()).hexdigest()
 
 
 def _count(table: str, filters: list[tuple[str, str]] | None = None) -> int:
-    try:
-        query = supabase.table(table).select("id", count="exact", head=True)
-        for column, value in filters or []:
-            query = query.eq(column, value)
-        result = query.execute()
-        return int(result.count or 0)
-    except Exception as error:
-        logger.warning("public_metrics_count_failed table=%s error=%s", table, type(error).__name__)
-        return 0
+    query = supabase.table(table).select("id", count="exact", head=True)
+    for column, value in filters or []:
+        query = query.eq(column, value)
+    result = query.execute()
+    return int(result.count or 0)
 
 
 @router.post("/visit", status_code=202)
-def record_visit(event: VisitEvent):
-    """Record a unique visitor event without failing the application if the optional table is absent."""
-    try:
-        now = datetime.now(timezone.utc).isoformat()
-        visitor_hash = _visitor_hash(event.visitor_id)
-        supabase.table("site_visitors").upsert(
-            {"visitor_hash": visitor_hash, "last_seen_at": now, "last_page": event.page},
-            on_conflict="visitor_hash",
-        ).execute()
-        return {"success": True}
-    except Exception as error:
-        logger.warning("site_visitors_record_failed error=%s", type(error).__name__)
-        return {"success": True, "warning": "visit_recording_skipped"}
+def record_visit(event: VisitEvent, _: None = Depends(enforce_metrics_rate_limit)):
+    """Record a unique visitor event; never claim success if storage failed."""
+    now = datetime.now(timezone.utc).isoformat()
+    visitor_hash = _visitor_hash(event.visitor_id)
+    supabase.table("site_visitors").upsert(
+        {"visitor_hash": visitor_hash, "last_seen_at": now, "last_page": event.page},
+        on_conflict="visitor_hash",
+    ).execute()
+    return {"success": True}
 
 
 @router.get("/overview")
-def public_overview():
-    """Return platform overview metrics. Tolerates absent site_visitors table gracefully."""
+def public_overview(_: None = Depends(enforce_metrics_rate_limit)):
+    """Return platform metrics or a clear 503; never substitute fake zeroes."""
     try:
-        total_visitors = 0
-        active_visitors = 0
-        try:
-            total_visitors = _count("site_visitors")
-            recent = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-            active_res = supabase.table("site_visitors").select("id", count="exact", head=True).gte("last_seen_at", recent).execute()
-            active_visitors = int(active_res.count or 0)
-        except Exception:
-            logger.warning("site_visitors_overview_skipped")
-
+        total_visitors = _count("site_visitors")
+        recent = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        active_res = supabase.table("site_visitors").select("id", count="exact", head=True).gte("last_seen_at", recent).execute()
+        active_visitors = int(active_res.count or 0)
         users = _count("custom_users", [("status", "ACTIVE")])
         scans = _count("scans")
         safe = _count("scans", [("classification", "SAFE")])

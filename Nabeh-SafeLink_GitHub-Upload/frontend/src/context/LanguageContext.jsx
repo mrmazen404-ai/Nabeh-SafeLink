@@ -68,13 +68,13 @@ export const translations = {
       scanningBtn: 'جاري الفحص...',
       errEmptyInput: 'الرجاء إدخال رابط أو نص صحيح للتحقق منه',
       errScanFailed: 'حدث خطأ أثناء الفحص، حاول مرة أخرى',
-      errServerConnection: 'تعذر الاتصال بالخادم. تأكد من تشغيل خادم FastAPI Backend.',
+      errServerConnection: 'تعذر الوصول إلى خدمة الفحص حاليًا. تحقق من اتصالك وحاول مرة أخرى.',
       errPaste: 'تعذر القراءة من المحافظة تلقائياً',
       recentScansTitle: 'آخر الفحوصات',
       recentCount: '{count} فحوصات',
       rescanTooltip: 'انقر لإعادة الفحص المباشر',
       rescanAria: 'إعادة فحص {url} - الحالة {status}',
-      guestTitle: 'فحص كضيف:', guestDesc: 'يمكنك فحص رابط أو رسالة دون حساب. لا تحفظ Nabeh النتيجة في قاعدة بياناتها، لكن قد يُرسل الإدخال إلى VirusTotal أو Gemini للتحليل؛ لا تفحص بيانات سرية.', guestPrivacy: 'النتيجة مؤقتة ولا تُحفظ في سجل Nabeh. قد تُستخدم خدمات تحليل خارجية عند تفعيلها.', noRecentScans: 'لا توجد فحوصات محفوظة بعد.', savedScan: 'فحص محفوظ',
+      guestTitle: 'فحص كضيف:', guestDesc: 'يمكنك فحص رابط أو رسالة دون حساب. لا تحفظ Nabeh النتيجة في قاعدة بياناتها، لكن قد يُرسل الإدخال إلى VirusTotal أو Gemini للتحليل؛ لا تفحص بيانات سرية.', guestPrivacy: 'النتيجة مؤقتة ولا تُحفظ في سجل Nabeh. قد تُستخدم خدمات تحليل خارجية عند تفعيلها.', noRecentScans: 'لا توجد فحوصات محفوظة بعد.', savedScan: 'فحص محفوظ', workspace: 'مركز نابح للحماية الذكية', liveProtection: 'حماية نشطة ومراقبة فورية', capabilities: 'مزايا الفحص', aiAnalysis: 'تحليل بالذكاء الاصطناعي', multiSource: 'فحص متعدد المصادر', privacyFirst: 'الخصوصية أولاً',
     },
 
     // History Page
@@ -610,13 +610,13 @@ export const translations = {
       scanningBtn: 'Scanning...',
       errEmptyInput: 'Please enter a valid URL or message text to inspect',
       errScanFailed: 'An error occurred during scanning. Please try again.',
-      errServerConnection: 'Failed to connect to the server. Ensure FastAPI Backend is running.',
+      errServerConnection: 'The scanning service is temporarily unreachable. Check your connection and try again.',
       errPaste: 'Unable to read from clipboard automatically',
       recentScansTitle: 'Recent Scans',
       recentCount: '{count} scans',
       rescanTooltip: 'Click to trigger instant rescan',
       rescanAria: 'Rescan {url} - Status {status}',
-      guestTitle: 'Guest scan:', guestDesc: 'Scan a URL or message without an account. Nabeh does not save the result, but the input may be sent to VirusTotal or Gemini for analysis; do not scan secrets.', guestPrivacy: 'The result is temporary and is not saved to Nabeh history. External analysis services may be used when enabled.', noRecentScans: 'No saved scans yet.', savedScan: 'Saved scan',
+      guestTitle: 'Guest scan:', guestDesc: 'Scan a URL or message without an account. Nabeh does not save the result, but the input may be sent to VirusTotal or Gemini for analysis; do not scan secrets.', guestPrivacy: 'The result is temporary and is not saved to Nabeh history. External analysis services may be used when enabled.', noRecentScans: 'No saved scans yet.', savedScan: 'Saved scan', workspace: 'NABEH SECURE WORKSPACE', liveProtection: 'Live protection enabled', capabilities: 'Scan capabilities', aiAnalysis: 'AI analysis', multiSource: 'Multi-source scan', privacyFirst: 'Privacy first',
     },
 
     // History Page

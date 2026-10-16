@@ -52,7 +52,7 @@ async def create_support_request(
     recipient = mask_email(request.email)
 
     full_message = f"Request Type: {request.request_type}\nScan ID: {request.scan_id or 'N/A'}\n\nDetails:\n{request.details}"
-    
+
     support_data = {
         "email": request.email.lower().strip(),
         "subject": f"[{request.request_type.upper()}] {request.subject.strip()} ({ticket_id})",

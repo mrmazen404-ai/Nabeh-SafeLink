@@ -74,7 +74,14 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
   const exp = result?.explanation || {};
   const messageText = result?.input_value || '';
   const extractedUrl = result?.extracted_url || null;
-  const providerName = exp?.provider || result?.source || 'Gemini AI Agent (Search Grounded)';
+  const providerName = (() => {
+    const provider = String(exp?.provider || result?.source || '').toUpperCase();
+    if (provider.includes('LOCAL') || provider.includes('FALLBACK') || provider.includes('RULES')) {
+      return lang === 'ar' ? 'تحليل أمني احتياطي' : 'Safe fallback analysis';
+    }
+    if (provider.includes('GEMINI')) return lang === 'ar' ? 'تحليل الذكاء الاصطناعي' : 'AI security analysis';
+    return lang === 'ar' ? 'تحليل أمني' : 'Security analysis';
+  })();
   const officialPortal = exp?.official_portal_url && exp.official_portal_url !== 'غير متاح' ? exp.official_portal_url : null;
   const actionSteps = Array.isArray(exp?.action_plan_steps) && exp.action_plan_steps.length > 0 ? exp.action_plan_steps : [];
 

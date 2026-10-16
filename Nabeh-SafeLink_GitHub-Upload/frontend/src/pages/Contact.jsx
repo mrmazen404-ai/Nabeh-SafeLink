@@ -70,11 +70,15 @@ export default function Contact({ activeTab, setActiveTab }) {
         setErrorMessage('تعذر حفظ طلب الدعم حاليًا. حاول لاحقًا.');
       }
     } catch (err) {
-      const serverDetail = err?.response?.data?.detail;
-      if (err?.response?.status === 401) {
-        setErrorMessage(serverDetail || 'جلسة التوثيق منتهية. يرجى تسجيل الدخول مجدداً.');
+      const status = err?.response?.status;
+      if (status === 401) {
+        setErrorMessage('جلسة التوثيق منتهية. يرجى تسجيل الدخول مجدداً.');
+      } else if (status === 429) {
+        setErrorMessage('تم تجاوز حد الطلبات مؤقتًا. حاول مرة أخرى لاحقًا.');
+      } else if (status >= 500) {
+        setErrorMessage('خدمة الدعم غير متاحة مؤقتًا. حاول مرة أخرى بعد قليل.');
       } else {
-        setErrorMessage(serverDetail || 'تعذر حفظ طلب الدعم حاليًا. حاول لاحقًا.');
+        setErrorMessage('تعذر حفظ طلب الدعم حاليًا. حاول لاحقًا.');
       }
     } finally {
       setIsSubmitting(false);

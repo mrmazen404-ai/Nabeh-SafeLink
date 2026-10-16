@@ -37,7 +37,7 @@ class ScanService:
     def analyze_text_phishing(text: str, has_embedded_url: bool = False) -> dict:
         text_lower = text.lower()
         matches = [word for word in ARABIC_PHISHING_KEYWORDS if word in text_lower or word in text]
-        
+
         safe_greetings = (
             "السلام عليكم", "سلام عليكم", "صباح الخير", "مساء الخير",
             "مرحبا", "أهلا", "اهلاً", "شكرا", "شكراً", "كيف حالك",

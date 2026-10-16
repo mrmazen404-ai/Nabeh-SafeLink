@@ -763,7 +763,7 @@ body .mobile-nav-item span { max-width: 100%; overflow: hidden; text-overflow: e
   .header-preference-btn, .header-login-btn, .header-logout-btn { min-width: var(--touch-target); padding-inline: 9px; }
   .header-login-btn, .header-logout-btn { font-size: var(--text-xs); }
   .header-logout-btn { max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
-  .app-container:has(.mobile-bottom-nav) { padding-bottom: 76px; }
+  .app-container { padding-bottom: 76px; }
 }
 
 @media (max-width: 380px) {
@@ -790,4 +790,47 @@ body .mobile-nav-item span { max-width: 100%; overflow: hidden; text-overflow: e
   .page-container{padding-inline:12px}
   .app-header-container{padding-inline:12px;gap:8px}
   .header-badge{display:none}
+}
+
+
+/* Final compatibility layer: keep core layout usable without optional CSS features. */
+html, body, #root { min-height: 100vh; }
+@supports (min-height: 100dvh) {
+  html, body, #root { min-height: 100dvh; }
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .app-header, .mobile-bottom-nav, .login-shell, .welcome-control, .welcome-visual-card {
+    background: var(--color-bg) !important;
+  }
+}
+@supports not (color: color-mix(in srgb, white, black)) {
+  .login-page, .welcome-page, .scanner-page, .result-page { background: var(--color-bg-subtle); }
+  .login-shell, .welcome-feature-card, .scanner-toggle-bar, .result-trust-strip { background: var(--color-bg); }
+}
+
+/* Tablet header: collapse the high-density desktop navigation before it can overflow. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .app-header-container { padding-inline: 16px; gap: 8px; }
+  .header-nav-desktop { display: none !important; }
+  .header-actions { gap: 5px; }
+  .header-preference-btn { padding-inline: 9px; }
+  .header-preference-btn span, .header-badge { display: none; }
+  .header-login-btn, .header-logout-btn { padding-inline: 11px; }
+}
+@media (max-width: 760px) {
+  .header-brand { flex: 1 1 auto; overflow: hidden; }
+  .header-brand .nabeh-logo { min-width: 0; }
+  .header-brand .nabeh-logo-text { min-width: 0; }
+  .header-brand .nabeh-logo-text > div { min-width: 0; }
+  .header-brand .nabeh-logo-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* Reduced-motion contract for every branded animation. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -17,7 +17,16 @@ export default function ScanDetails({ activeTab, setActiveTab, onNavigateAuth })
   useEffect(() => {
     getScanDetails(scanId)
       .then((res) => setData(res.data))
-      .catch((err) => setError(err?.response?.data?.detail || t('scanDetails.loadError')));
+      .catch((err) => {
+        const status = err?.response?.status;
+        setError(
+          status === 401
+            ? (lang === 'ar' ? 'انتهت جلستك. سجّل الدخول لعرض تفاصيل الفحص.' : 'Your session has expired. Please sign in to view the scan details.')
+            : status === 404
+              ? (lang === 'ar' ? 'لم يتم العثور على تفاصيل هذا الفحص.' : 'The details for this scan could not be found.')
+              : t('scanDetails.loadError'),
+        );
+      });
   }, [scanId, t]);
 
   const scan = data?.scan;

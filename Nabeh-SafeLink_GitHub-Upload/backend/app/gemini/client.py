@@ -137,7 +137,7 @@ Respond ONLY in valid JSON matching this exact structure:
     # Multi-tier model fallback cascade: iterates through every model until a successful response
     for model_name in PRIMARY_MODELS:
         log_event(logger, logging.INFO, "gemini_model_attempt_started", operation_id=operation_id, model=model_name, mode="search")
-        
+
         # Mode 1: Search Grounded Generation
         try:
             response = await gemini_client.aio.models.generate_content(

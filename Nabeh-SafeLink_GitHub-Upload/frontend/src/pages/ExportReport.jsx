@@ -20,7 +20,16 @@ export default function ExportReport({ activeTab, setActiveTab, onNavigateAuth }
     }
     getScanDetails(scanId)
       .then((res) => setReport(res.data))
-      .catch((err) => setError(err?.response?.data?.detail || t('exportReport.loadError')));
+      .catch((err) => {
+        const status = err?.response?.status;
+        setError(
+          status === 401
+            ? (lang === 'ar' ? 'انتهت جلستك. سجّل الدخول لتصدير التقرير.' : 'Your session has expired. Please sign in to export the report.')
+            : status === 404
+              ? (lang === 'ar' ? 'لم يتم العثور على الفحص المطلوب.' : 'The requested scan could not be found.')
+              : t('exportReport.loadError'),
+        );
+      });
   }, [scanId, t]);
 
   const scan = report?.scan;

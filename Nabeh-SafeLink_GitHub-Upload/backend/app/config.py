@@ -31,7 +31,7 @@ class Settings:
     APP_VERSION: str = os.getenv("APP_VERSION", "1.0.0")
     CORS_ALLOWED_ORIGINS: tuple = tuple(
         origin.strip().rstrip("/")
-        for origin in os.getenv("NABEH_CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+        for origin in os.getenv("NABEH_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:5174").split(",")
         if origin.strip()
     )
 
