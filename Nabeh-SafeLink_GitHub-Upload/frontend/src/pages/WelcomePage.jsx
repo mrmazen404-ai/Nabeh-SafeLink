@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -12,6 +13,7 @@ import {
   ShieldCheckIcon,
 } from '../components/Icons';
 import './welcome-page.css';
+import api from '../services/api';
 
 const team = [
   ['Aryam Odeh Al-Huwaiti', '451004106'],
@@ -48,6 +50,7 @@ const content = {
     year: '1448 هـ – 2026 م',
     priority: '“Your online safety” is our priority',
     footer: 'منصة ويب ذكية للكشف والوقاية من التهديدات الإلكترونية',
+    platformStats: 'إحصائيات المنصة الحية', visitors: 'زوار فريدون', users: 'مستخدمون مسجلون', scans: 'إجمالي الفحوصات', safeScans: 'فحوصات آمنة', suspiciousScans: 'فحوصات مشبوهة', dangerousScans: 'فحوصات خطرة', statsError: 'الإحصائيات غير متاحة مؤقتًا',
   },
   en: {
     eyebrow: 'Graduation Project • Intelligent Cybersecurity',
@@ -76,6 +79,7 @@ const content = {
     year: '1448 H – 2026 G',
     priority: '“Your online safety” is our priority',
     footer: 'An intelligent web platform for cyber threat detection and prevention',
+    platformStats: 'Live platform statistics', visitors: 'Unique visitors', users: 'Registered users', scans: 'Total scans', safeScans: 'Safe scans', suspiciousScans: 'Suspicious scans', dangerousScans: 'Dangerous scans', statsError: 'Statistics are temporarily unavailable',
   },
 };
 
@@ -84,6 +88,13 @@ export default function WelcomePage() {
   const { isGuest } = useAuth();
   const { lang, dir } = useLanguage();
   const text = content[lang] || content.ar;
+  const [platformStats, setPlatformStats] = useState(null);
+  const [statsFailed, setStatsFailed] = useState(false);
+  useEffect(() => {
+    let visitorId = localStorage.getItem('nabeh_visitor_id');
+    if (!visitorId) { visitorId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64); localStorage.setItem('nabeh_visitor_id', visitorId); }
+    Promise.allSettled([api.post('/public/visit', { visitor_id: visitorId, page: 'welcome' }), api.get('/public/overview')]).then(([, overview]) => { if (overview.status === 'fulfilled') setPlatformStats(overview.value.data?.data || null); else setStatsFailed(true); });
+  }, []);
   const ForwardIcon = dir === 'rtl' ? ArrowLeftIcon : ArrowRightIcon;
   const setActiveTab = (tab) => {
     const paths = {
@@ -141,6 +152,11 @@ export default function WelcomePage() {
       <section className="welcome-mission">
         <div><span className="welcome-section-label">{text.missionLabel}</span><h2>{text.missionTitle}</h2></div>
         <p>{text.missionCopy}</p>
+      </section>
+
+      <section className="welcome-platform-stats" aria-label={text.platformStats}>
+        <div className="welcome-platform-stats-heading"><span className="welcome-section-label">{text.platformStats}</span><small>{platformStats?.generated_at ? new Date(platformStats.generated_at).toLocaleString(lang === 'en' ? 'en-US' : 'ar-SA') : '—'}</small></div>
+        {statsFailed ? <p className="welcome-stats-error">{text.statsError}</p> : <div className="welcome-stats-grid">{[[text.visitors, platformStats?.visitors], [text.users, platformStats?.registered_users], [text.scans, platformStats?.scans], [text.safeScans, platformStats?.safe_scans], [text.suspiciousScans, platformStats?.suspicious_scans], [text.dangerousScans, platformStats?.dangerous_scans]].map(([label, value]) => <article className="welcome-stat-card" key={label}><span>{label}</span><strong>{value ?? '—'}</strong></article>)}</div>}
       </section>
 
       <section className="welcome-features" aria-label={text.missionLabel}>

@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense, Component } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -25,9 +25,7 @@ import SessionCheckScreen from './components/SessionCheckScreen';
 
 function lazyWithRetry(componentImport) {
   return lazy(async () => {
-    const pageAlreadyRefreshed = JSON.parse(
-      sessionStorage.getItem('nabeh_chunk_retry') || 'false'
-    );
+    const pageAlreadyRefreshed = sessionStorage.getItem('nabeh_chunk_retry') === 'true';
     try {
       const component = await componentImport();
       sessionStorage.setItem('nabeh_chunk_retry', 'false');
@@ -38,9 +36,29 @@ function lazyWithRetry(componentImport) {
         window.location.reload();
         return new Promise(() => {});
       }
+      sessionStorage.setItem('nabeh_chunk_retry', 'false');
       throw error;
     }
   });
+}
+
+class AppErrorBoundary extends Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error) { console.error('Nabeh UI render error', error); }
+  reset = () => { sessionStorage.removeItem('nabeh_chunk_retry'); window.location.reload(); };
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    const isArabic = document.documentElement.lang !== 'en';
+    return <main className="app-fatal-error" dir={isArabic ? 'rtl' : 'ltr'}>
+      <section className="app-fatal-card" role="alert">
+        <div className="app-fatal-icon">!</div>
+        <h1>{isArabic ? 'تعذر تحميل الصفحة' : 'The page could not be loaded'}</h1>
+        <p>{isArabic ? 'حدث خطأ مؤقت في الواجهة. أعد المحاولة دون فقدان مسارك الحالي.' : 'A temporary interface error occurred. Retry without losing your current route.'}</p>
+        <button type="button" className="btn btn-primary" onClick={this.reset}>{isArabic ? 'إعادة المحاولة' : 'Try again'}</button>
+      </section>
+    </main>;
+  }
 }
 
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
@@ -285,6 +303,7 @@ export default function App() {
   const [initialScanUrl, setInitialScanUrl] = useState('');
 
   return (
+    <AppErrorBoundary>
     <ThemeProvider>
       <LanguageProvider>
         <BrowserRouter>
@@ -298,5 +317,6 @@ export default function App() {
         </BrowserRouter>
       </LanguageProvider>
     </ThemeProvider>
+    </AppErrorBoundary>
   );
 }

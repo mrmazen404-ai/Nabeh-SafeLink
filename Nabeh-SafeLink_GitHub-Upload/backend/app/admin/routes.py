@@ -50,6 +50,19 @@ class UserStatusRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class BroadcastNotificationRequest(BaseModel):
+    title: str = Field(min_length=2, max_length=160)
+    body: str = Field(min_length=2, max_length=5000)
+
+
+class SupportReplyRequest(BaseModel):
+    status: Literal["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] | None = None
+    priority: Literal["LOW", "NORMAL", "HIGH", "URGENT"] | None = None
+    assign_to_me: bool = False
+    reply: str | None = Field(default=None, max_length=5000)
+    note: str | None = Field(default=None, max_length=1000)
+
+
 def _admin_by_email(email: str) -> dict | None:
     result = supabase.table("admin_users").select("*").eq("email", str(email).strip().lower()).limit(1).execute()
     return result.data[0] if result.data else None
@@ -74,6 +87,16 @@ def _audit(admin_id: str | None, action: str, resource_type: str, resource_id: s
         "ip_hash": hash_value(client_ip(request)),
         "user_agent_hash": hash_value(request.headers.get("user-agent", "")),
         "request_id": request_id,
+    }).execute()
+
+
+def _user_notification(user_id: str, title: str, body: str, notification_type: str = "SYSTEM"):
+    """Create an in-app notification; failures are allowed to surface to admins."""
+    return supabase.table("notifications").insert({
+        "user_id": str(user_id),
+        "type": notification_type,
+        "title": title,
+        "body": body,
     }).execute()
 
 
@@ -545,3 +568,235 @@ def invite(request: InviteRequest, http_request: Request, admin: dict = Depends(
     invitation = result.data[0]
     _audit(str(admin["id"]), "ADMIN_INVITATION_CREATED", "admin_invitation", invitation["id"], http_request, after={"email": str(request.email).lower(), "role": request.role})
     return {"success": True, "data": {"id": invitation["id"], "token": raw, "expires_at": invitation["expires_at"]}}
+
+
+# ---------------------------------------------------------------------------
+# Operational Admin modules: scans, feedback, support, deletion requests,
+# and bounded statistics. All write operations are permission-gated and audited.
+# ---------------------------------------------------------------------------
+
+class ScanReviewRequest(BaseModel):
+    classification: Literal["SAFE", "SUSPICIOUS", "DANGEROUS", "UNKNOWN", "NEEDS_REVIEW"]
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class FeedbackStatusRequest(BaseModel):
+    status: Literal["NEW", "REVIEWED", "USED_FOR_ANALYSIS"]
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class DeletionDecisionRequest(BaseModel):
+    status: Literal["CANCELLED", "PROCESSING", "COMPLETED"]
+    reason: str = Field(min_length=3, max_length=500)
+
+
+def _paged(table: str, fields: str, limit: int, offset: int, filters: list[tuple[str, str, object]] | None = None):
+    query = supabase.table(table).select(fields, count="exact")
+    for operator, column, value in filters or []:
+        query = getattr(query, operator)(column, value)
+    result = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+    return result.data or [], {"limit": limit, "offset": offset, "total": int(result.count or 0)}
+
+
+@router.get("/scans")
+def admin_scans(
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    status: Literal["PROCESSING", "COMPLETED", "FAILED"] | None = Query(None),
+    classification: Literal["SAFE", "SUSPICIOUS", "DANGEROUS", "UNKNOWN", "NEEDS_REVIEW"] | None = Query(None),
+    input_type: Literal["URL", "TEXT", "MESSAGE", "FILE", "EMAIL_HEADER"] | None = Query(None),
+    user_id: UUID | None = Query(None),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
+    admin: dict = Depends(require_permissions("scans.read")),
+):
+    del admin
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(status_code=422, detail="نطاق التاريخ غير صحيح")
+    filters = []
+    if status: filters.append(("eq", "status", status))
+    if classification: filters.append(("eq", "classification", classification))
+    if input_type: filters.append(("eq", "input_type", input_type))
+    if user_id: filters.append(("eq", "user_id", str(user_id)))
+    if from_date: filters.append(("gte", "created_at", from_date.isoformat()))
+    if to_date: filters.append(("lte", "created_at", to_date.isoformat()))
+    rows, meta = _paged(
+        "scans",
+        "id,user_id,input_type,input_language,status,classification,confidence_score,confidence_level,recommendation,model_version_id,created_at,completed_at,error_code",
+        limit, offset, filters,
+    )
+    return {"success": True, "data": rows, "meta": meta}
+
+
+@router.get("/scans/{scan_id}")
+def admin_scan_details(scan_id: UUID, admin: dict = Depends(require_permissions("scans.read"))):
+    del admin
+    result = supabase.table("scans").select(
+        "id,user_id,input_type,input_value_masked,input_hash,input_language,status,classification,confidence_score,confidence_level,recommendation,model_version_id,request_id,error_code,analysis_snapshot,created_at,completed_at"
+    ).eq("id", str(scan_id)).limit(1).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="الفحص غير موجود")
+    data = result.data[0]
+    signals = supabase.table("scan_signals").select(
+        "id,signal_code,signal_label_en,signal_label_ar,severity,evidence_masked,source,created_at"
+    ).eq("scan_id", str(scan_id)).order("created_at", desc=True).limit(100).execute()
+    explanations = supabase.table("scan_explanations").select(
+        "id,language,summary,reasons,recommendation,provider,prompt_version,created_at"
+    ).eq("scan_id", str(scan_id)).order("created_at", desc=True).limit(20).execute()
+    data["signals"] = signals.data or []
+    data["explanations"] = explanations.data or []
+    return {"success": True, "data": data}
+
+
+@router.patch("/scans/{scan_id}/review")
+def review_scan(
+    scan_id: UUID,
+    request: ScanReviewRequest,
+    http_request: Request,
+    admin: dict = Depends(require_permissions("scans.review")),
+):
+    result = supabase.table("scans").select("id,classification,status,analysis_snapshot").eq("id", str(scan_id)).limit(1).execute()
+    scan = result.data[0] if result.data else None
+    if not scan:
+        raise HTTPException(status_code=404, detail="الفحص غير موجود")
+    before = {"classification": scan.get("classification")}
+    snapshot = scan.get("analysis_snapshot") or {}
+    if not isinstance(snapshot, dict): snapshot = {}
+    snapshot["admin_review"] = {"reviewed_by": str(admin["id"]), "reason": request.reason, "reviewed_at": now().isoformat()}
+    updated = supabase.table("scans").update({"classification": request.classification, "analysis_snapshot": snapshot}).eq("id", str(scan_id)).execute()
+    data = (updated.data or [None])[0] or {**scan, "classification": request.classification}
+    _audit(str(admin["id"]), "ADMIN_SCAN_REVIEWED", "scan", str(scan_id), http_request, before=before, after={"classification": request.classification, "reason": request.reason}, target_scan_id=str(scan_id))
+    return {"success": True, "data": data}
+
+
+@router.get("/feedback")
+def admin_feedback(
+    limit: int = Query(25, ge=1, le=100), offset: int = Query(0, ge=0),
+    status: Literal["NEW", "REVIEWED", "USED_FOR_ANALYSIS"] | None = Query(None),
+    admin: dict = Depends(require_permissions("feedback.read")),
+):
+    del admin
+    filters = [("eq", "status", status)] if status else []
+    rows, meta = _paged("feedback", "id,scan_id,user_id,reported_classification,comment,status,reviewed_at,created_at", limit, offset, filters)
+    return {"success": True, "data": rows, "meta": meta}
+
+
+@router.patch("/feedback/{feedback_id}/status")
+def update_feedback(
+    feedback_id: UUID,
+    request: FeedbackStatusRequest,
+    http_request: Request,
+    admin: dict = Depends(require_permissions("feedback.manage")),
+):
+    result = supabase.table("feedback").select("id,status,scan_id").eq("id", str(feedback_id)).limit(1).execute()
+    row = result.data[0] if result.data else None
+    if not row: raise HTTPException(status_code=404, detail="البلاغ غير موجود")
+    payload = {"status": request.status, "reviewed_at": now().isoformat(), "reviewed_by_admin_id": str(admin["id"])}
+    updated = supabase.table("feedback").update(payload).eq("id", str(feedback_id)).execute()
+    _audit(str(admin["id"]), "ADMIN_FEEDBACK_STATUS_CHANGED", "feedback", str(feedback_id), http_request, before={"status": row["status"]}, after={"status": request.status, "note": request.note}, target_scan_id=row.get("scan_id"))
+    return {"success": True, "data": (updated.data or [None])[0] or {**row, **payload}}
+
+
+@router.get("/support")
+def admin_support(
+    limit: int = Query(25, ge=1, le=100), offset: int = Query(0, ge=0),
+    status: Literal["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] | None = Query(None),
+    priority: Literal["LOW", "NORMAL", "HIGH", "URGENT"] | None = Query(None),
+    admin: dict = Depends(require_permissions("support.read")),
+):
+    del admin
+    filters = []
+    if status: filters.append(("eq", "status", status))
+    if priority: filters.append(("eq", "priority", priority))
+    rows, meta = _paged("support_requests", "id,user_id,email,subject,message,status,priority,admin_reply,replied_at,assigned_admin_id,created_at,resolved_at", limit, offset, filters)
+    return {"success": True, "data": rows, "meta": meta}
+
+
+@router.patch("/support/{support_id}")
+def update_support(
+    support_id: UUID,
+    request: SupportReplyRequest,
+    http_request: Request,
+    admin: dict = Depends(require_permissions("support.manage")),
+):
+    result = supabase.table("support_requests").select("id,status,priority,user_id,subject").eq("id", str(support_id)).limit(1).execute()
+    row = result.data[0] if result.data else None
+    if not row: raise HTTPException(status_code=404, detail="طلب الدعم غير موجود")
+    payload = {key: value for key, value in {"status": request.status, "priority": request.priority}.items() if value is not None}
+    if request.assign_to_me:
+        payload["assigned_admin_id"] = str(admin["id"])
+    if request.status in {"RESOLVED", "CLOSED"}: payload["resolved_at"] = now().isoformat()
+    if request.reply and request.reply.strip():
+        payload["admin_reply"] = request.reply.strip()
+        payload["replied_at"] = now().isoformat()
+    if not payload: raise HTTPException(status_code=422, detail="لا يوجد تعديل")
+    updated = supabase.table("support_requests").update(payload).eq("id", str(support_id)).execute()
+    if request.reply and request.reply.strip() and row.get("user_id"):
+        _user_notification(str(row["user_id"]), f"رد على طلب الدعم: {row.get('subject') or ''}", request.reply.strip())
+    _audit(str(admin["id"]), "ADMIN_SUPPORT_UPDATED", "support_request", str(support_id), http_request, before={"status": row.get("status"), "priority": row.get("priority")}, after={**payload, "note": request.note})
+    return {"success": True, "data": (updated.data or [None])[0] or {**row, **payload}}
+
+
+@router.post("/notifications/broadcast")
+def broadcast_notification(request: BroadcastNotificationRequest, http_request: Request, admin: dict = Depends(require_permissions("users.manage"))):
+    users = supabase.table("custom_users").select("id").eq("status", "ACTIVE").limit(10000).execute().data or []
+    rows = [{"user_id": str(user["id"]), "type": "SYSTEM", "title": request.title.strip(), "body": request.body.strip()} for user in users]
+    for start in range(0, len(rows), 500):
+        if rows[start:start + 500]: supabase.table("notifications").insert(rows[start:start + 500]).execute()
+    _audit(str(admin["id"]), "ADMIN_NOTIFICATION_BROADCAST", "notification", None, http_request, after={"recipient_count": len(rows), "title": request.title.strip()})
+    return {"success": True, "data": {"recipient_count": len(rows)}}
+
+
+@router.get("/deletion-requests")
+def admin_deletion_requests(
+    limit: int = Query(25, ge=1, le=100), offset: int = Query(0, ge=0),
+    status: Literal["PENDING", "CONFIRMED", "PROCESSING", "COMPLETED", "CANCELLED", "FAILED"] | None = Query(None),
+    admin: dict = Depends(require_permissions("users.read")),
+):
+    del admin
+    filters = [("eq", "status", status)] if status else []
+    rows, meta = _paged("account_deletion_requests", "id,user_id,status,reason,requested_at,confirmed_at,completed_at,cancelled_at,failure_reason,processed_by_admin_id,decision_reason", limit, offset, filters)
+    return {"success": True, "data": rows, "meta": meta}
+
+
+@router.patch("/deletion-requests/{request_id}")
+def decide_deletion_request(
+    request_id: UUID,
+    request: DeletionDecisionRequest,
+    http_request: Request,
+    admin: dict = Depends(require_permissions("users.manage")),
+):
+    result = supabase.table("account_deletion_requests").select("id,status,user_id").eq("id", str(request_id)).limit(1).execute()
+    row = result.data[0] if result.data else None
+    if not row: raise HTTPException(status_code=404, detail="طلب الحذف غير موجود")
+    payload = {"status": request.status, "processed_by_admin_id": str(admin["id"]), "decision_reason": request.reason}
+    if request.status == "COMPLETED": payload["completed_at"] = now().isoformat()
+    if request.status == "CANCELLED": payload["cancelled_at"] = now().isoformat()
+    updated = supabase.table("account_deletion_requests").update(payload).eq("id", str(request_id)).execute()
+    _audit(str(admin["id"]), "ADMIN_DELETION_REQUEST_DECIDED", "account_deletion_request", str(request_id), http_request, before={"status": row["status"]}, after={"status": request.status, "reason": request.reason}, target_user_id=row.get("user_id"))
+    return {"success": True, "data": (updated.data or [None])[0] or {**row, **payload}}
+
+
+@router.get("/statistics/overview")
+def statistics_overview(
+    range_days: int = Query(30, ge=1, le=90),
+    admin: dict = Depends(require_permissions("dashboard.read")),
+):
+    del admin
+    start = (now() - timedelta(days=range_days)).isoformat()
+    try:
+        counts = {
+            "scans": _count("scans", [("gte", "created_at", start)]),
+            "completed": _count("scans", [("gte", "created_at", start), ("eq", "status", "COMPLETED")]),
+            "failed": _count("scans", [("gte", "created_at", start), ("eq", "status", "FAILED")]),
+            "safe": _count("scans", [("gte", "created_at", start), ("eq", "classification", "SAFE")]),
+            "suspicious": _count("scans", [("gte", "created_at", start), ("eq", "classification", "SUSPICIOUS")]),
+            "dangerous": _count("scans", [("gte", "created_at", start), ("eq", "classification", "DANGEROUS")]),
+            "feedback": _count("feedback", [("gte", "created_at", start)]),
+            "support": _count("support_requests", [("gte", "created_at", start)]),
+        }
+        denominator = counts["scans"] or 1
+        counts["threat_rate"] = round((counts["dangerous"] + counts["suspicious"]) / denominator, 4)
+        return {"success": True, "data": {"range_days": range_days, "period_start": start, "generated_at": now().isoformat(), "counts": counts}}
+    except Exception:
+        raise HTTPException(status_code=503, detail="تعذر تحميل الإحصائيات") from None

@@ -16,7 +16,9 @@ if (
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 30000,
+  // URL scans may use VirusTotal before the bounded AI fallback; keep this
+  // above the backend's provider timeout without allowing an endless request.
+  timeout: 60000,
 });
 
 api.interceptors.request.use((config) => {

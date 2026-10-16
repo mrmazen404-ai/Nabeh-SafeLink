@@ -180,3 +180,14 @@
   .welcome-team-grid { grid-template-columns: 1fr; }
   .welcome-visual-card { font-size: 9px; }
 }
+
+.welcome-platform-stats{width:min(100%,var(--layout-max));margin:0 auto 28px;border:1px solid var(--color-border);border-radius:20px;padding:clamp(18px,3vw,28px);background:color-mix(in srgb,var(--color-bg) 88%,transparent);box-shadow:var(--shadow-md)}
+.welcome-platform-stats-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.welcome-platform-stats-heading small{color:var(--color-text-muted);font-size:10px}
+.welcome-stats-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.welcome-stat-card{min-width:0;border:1px solid var(--color-border);border-radius:14px;padding:14px 12px;background:var(--color-bg-subtle);text-align:center}
+.welcome-stat-card span{display:block;min-height:32px;color:var(--color-text-muted);font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.welcome-stat-card strong{display:block;margin-top:5px;color:var(--color-primary);font:800 clamp(20px,3vw,30px) Poppins,Cairo,sans-serif}
+.welcome-stats-error{margin:0;color:var(--color-danger);font-size:12px}
+@media(max-width:900px){.welcome-stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:520px){.welcome-platform-stats{padding:16px;border-radius:17px}.welcome-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.welcome-stat-card{padding:12px 8px}.welcome-stat-card span{min-height:0}}

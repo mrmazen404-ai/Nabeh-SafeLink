@@ -19,6 +19,7 @@ from app.dashboard.routes import router as dashboard_router
 from app.support.routes import router as support_router
 from app.legal.routes import router as legal_router
 from app.admin.routes import router as admin_router
+from app.public.routes import router as public_router
 from app.observability import configure_logging, elapsed_ms, install_request_id_filter, log_event, reset_request_id, set_request_id
 
 configure_logging()
@@ -69,6 +70,7 @@ app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboar
 app.include_router(support_router, prefix="/api/v1/support", tags=["Support"])
 app.include_router(legal_router, prefix="/api/v1/legal", tags=["Legal"])
 app.include_router(admin_router)
+app.include_router(public_router, prefix="/api/v1")
 
 
 @app.middleware("http")

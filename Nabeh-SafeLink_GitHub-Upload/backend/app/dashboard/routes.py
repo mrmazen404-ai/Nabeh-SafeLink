@@ -417,7 +417,7 @@ async def export_user_data(response: Response, authorization: Optional[str] = He
             "id,scan_id,reported_classification,comment,status,created_at"
         ).eq("user_id", user_id).execute()
         support = supabase.table("support_requests").select(
-            "id,subject,status,priority,created_at,resolved_at"
+            "id,subject,status,priority,admin_reply,replied_at,created_at,resolved_at"
         ).eq("user_id", user_id).execute()
         return {
             "success": True,

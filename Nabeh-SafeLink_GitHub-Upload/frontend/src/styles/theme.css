@@ -59,6 +59,7 @@
   --color-text-muted: #64748B;
   --color-bg: #FFFFFF;
   --color-bg-subtle: #F8FAFC;
+  --color-surface: #FFFFFF;
   --color-border: #E2E8F0;
   --color-border-strong: #CBD5E1;
 
@@ -117,6 +118,7 @@
   --color-text-muted: #CBD5E1;     /* Slate 300 */
   --color-bg: #1E293B;             /* Slate 800 Cards */
   --color-bg-subtle: #0F172A;      /* Slate 900 Canvas */
+  --color-surface: #1E293B;
   --color-border: #334155;         /* Slate 700 */
   --color-border-strong: #475569;  /* Slate 600 */
 
@@ -768,4 +770,24 @@ body .mobile-nav-item span { max-width: 100%; overflow: hidden; text-overflow: e
   .app-header-container { padding-inline: 10px; gap: 5px; }
   .header-actions { gap: 4px; }
   .header-login-btn, .header-logout-btn { max-width: 54px; padding-inline: 6px; }
+}
+
+/* Production responsive guardrails: every route must fit narrow and wide viewports. */
+.app-fatal-error{min-height:100dvh;display:grid;place-items:center;padding:clamp(16px,5vw,48px);background:var(--color-bg-subtle);color:var(--color-text)}
+.app-fatal-card{width:min(100%,520px);padding:clamp(22px,5vw,40px);border:1px solid var(--color-border);border-radius:clamp(16px,3vw,24px);background:var(--color-bg);box-shadow:var(--shadow-lg);text-align:center}
+.app-fatal-card h1{margin:12px 0 8px;font-size:clamp(22px,5vw,32px);color:var(--color-primary)}
+.app-fatal-card p{margin:0 0 20px;color:var(--color-text-secondary);line-height:1.8;font-size:var(--text-sm)}
+.app-fatal-icon{width:48px;height:48px;margin:auto;display:grid;place-items:center;border-radius:50%;background:var(--color-danger-bg);color:var(--color-danger);font-weight:800;font-size:24px}
+@media (max-width:600px){
+  html{font-size:15px}
+  .page-container{padding:clamp(18px,5vw,28px) var(--content-gutter) 84px}
+  .card{border-radius:16px}
+  .btn{width:100%;min-height:46px;padding-inline:14px}
+  .header-actions{gap:4px}
+  .header-preference-btn span,.header-login-btn span,.header-logout-btn span{display:none}
+}
+@media (max-width:380px){
+  .page-container{padding-inline:12px}
+  .app-header-container{padding-inline:12px;gap:8px}
+  .header-badge{display:none}
 }

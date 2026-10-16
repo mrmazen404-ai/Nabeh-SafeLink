@@ -24,10 +24,11 @@ class Settings:
     ADMIN_REFRESH_TOKEN_DAYS: int = int(os.getenv("ADMIN_REFRESH_TOKEN_DAYS", "7"))
     ADMIN_LOGIN_RATE_LIMIT: int = int(os.getenv("ADMIN_LOGIN_RATE_LIMIT", "5"))
     ADMIN_IP_SALT: str = os.getenv("ADMIN_IP_SALT", "")
+    VISITOR_HASH_SALT: str = os.getenv("VISITOR_HASH_SALT", "")
+    SCAN_AI_TIMEOUT_SECONDS: float = float(os.getenv("SCAN_AI_TIMEOUT_SECONDS", "18"))
     NABEH_TRUST_PROXY_HEADERS: bool = os.getenv("NABEH_TRUST_PROXY_HEADERS", "false").lower() in {"1", "true", "yes"}
     APP_NAME: str = os.getenv("APP_NAME", "Nabeh SafeLink")
     APP_VERSION: str = os.getenv("APP_VERSION", "1.0.0")
-    SCAN_AI_TIMEOUT_SECONDS: float = float(os.getenv("SCAN_AI_TIMEOUT_SECONDS", "15.0"))
     CORS_ALLOWED_ORIGINS: tuple = tuple(
         origin.strip().rstrip("/")
         for origin in os.getenv("NABEH_CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")

@@ -46,6 +46,9 @@ const navItems = [
   { path: '/audit-logs', label: 'سجل التدقيق', icon: '≡', permission: 'audit.read' },
   { path: '/sessions', label: 'الجلسات', icon: '◌', permission: 'sessions.read' },
   { path: '/statistics', label: 'الإحصائيات', icon: '▥', permission: 'dashboard.read' },
+  { path: '/feedback', label: 'البلاغات', icon: '!', permission: 'feedback.read' },
+  { path: '/support', label: 'الدعم', icon: '?', permission: 'support.read' },
+  { path: '/broadcast', label: 'إشعار عام', icon: '✦', permission: 'users.manage' },
 ];
 
 function currentPath() { return window.location.pathname || '/dashboard'; }
@@ -170,8 +173,11 @@ function ProtectedPage({ profile, path, go }) {
   if (path === '/sessions') return <SessionsPage />;
   if (path === '/audit-logs') return <AuditPage />;
   if (path === '/users') return <UsersPage />;
-  if (path === '/scans') return <ComingSoon title="إدارة الفحوصات" description="وحدة الفحوصات ستعرض نتائج الفحص والإشارات دون كشف البيانات الحساسة افتراضياً." permission="scans.read" />;
-  if (path === '/statistics') return <ComingSoon title="الإحصائيات" description="سيتم توصيل مؤشرات المنصة واستعلامات الإحصائيات في المرحلة التالية." permission="dashboard.read" />;
+  if (path === '/scans') return <ScansPage />;
+  if (path === '/statistics') return <StatisticsPage />;
+  if (path === '/feedback') return <FeedbackPage />;
+  if (path === '/support') return <SupportPage />;
+  if (path === '/broadcast') return <BroadcastPage />;
   if (path === '/profile') return <ComingSoon title="الملف الإداري" description="إدارة بيانات المسؤول وطرق المصادقة والجلسات ستضاف ضمن وحدة Admin Management." permission="admins.read" />;
   return <ComingSoon title="الصفحة غير موجودة" description="المسار المطلوب غير متاح في لوحة التحكم." permission="—" />;
 }
@@ -193,3 +199,51 @@ function App() {
 }
 
 createRoot(document.getElementById('root')).render(<App />);
+
+
+function OpsTable({ title, eyebrow, rows, columns, loading, error, onNext, onPrev, canPrev, canNext }) {
+  return <section className="panel table-panel"><div className="panel-heading"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div></div>{loading ? <div className="loading-state">جارٍ تحميل البيانات...</div> : error ? <div className="notice">{error}</div> : rows.length === 0 ? <div className="inline-empty">لا توجد بيانات مطابقة.</div> : <div className="table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id}>{columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : row[column.key] || '—'}</td>)}</tr>)}</tbody></table></div>}<div className="pagination"><button disabled={!canPrev || loading} onClick={onPrev}>السابق</button><span>{rows.length} نتيجة في الصفحة</span><button disabled={!canNext || loading} onClick={onNext}>التالي</button></div></section>;
+}
+
+function ScansPage() {
+  const [rows, setRows] = useState([]); const [offset, setOffset] = useState(0); const [total, setTotal] = useState(0); const [classification, setClassification] = useState(''); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [selected, setSelected] = useState(null); const limit = 25;
+  const load = () => { setLoading(true); setError(''); const params = { limit, offset }; if (classification) params.classification = classification; api.get('/scans', { params }).then(({ data }) => { setRows(data.data || []); setTotal(data.meta?.total || 0); }).catch((e) => setError(e.response?.data?.detail || 'تعذر تحميل الفحوصات')).finally(() => setLoading(false)); };
+  useEffect(() => { load(); }, [offset, classification]);
+  async function detail(id) { try { const { data } = await api.get(`/scans/${id}`); setSelected(data.data); } catch (e) { setError(e.response?.data?.detail || 'تعذر تحميل تفاصيل الفحص'); } }
+  async function review(scan) { const next = window.prompt('التصنيف الجديد (SAFE/SUSPICIOUS/DANGEROUS/UNKNOWN/NEEDS_REVIEW):', scan.classification || 'NEEDS_REVIEW'); const reason = next && window.prompt('سبب المراجعة:', 'مراجعة تشغيلية'); if (!next || !reason) return; try { await api.patch(`/scans/${scan.id}/review`, { classification: next.toUpperCase(), reason }); load(); } catch (e) { setError(e.response?.data?.detail || 'تعذر حفظ مراجعة الفحص'); } }
+  const columns = [{ key: 'input_type', label: 'النوع' }, { key: 'status', label: 'الحالة' }, { key: 'classification', label: 'التصنيف' }, { key: 'confidence_score', label: 'الثقة' }, { key: 'created_at', label: 'التاريخ', render: (r) => new Date(r.created_at).toLocaleString('ar') }, { key: 'actions', label: 'إجراء', render: (r) => <><button className="row-action" onClick={() => detail(r.id)}>تفاصيل</button>{r.classification !== 'SAFE' && <button className="row-action" onClick={() => review(r)}>مراجعة</button>}</> }];
+  return <div className="page-stack"><section className="panel"><div className="filters"><select value={classification} onChange={(e) => { setOffset(0); setClassification(e.target.value); }}><option value="">كل التصنيفات</option><option>SAFE</option><option>SUSPICIOUS</option><option>DANGEROUS</option><option>UNKNOWN</option><option>NEEDS_REVIEW</option></select></div></section><OpsTable title="الفحوصات" eyebrow="مراجعة آمنة مع إخفاء المدخلات" rows={rows} columns={columns} loading={loading} error={error} canPrev={offset > 0} canNext={offset + limit < total} onPrev={() => setOffset(Math.max(0, offset - limit))} onNext={() => setOffset(offset + limit)} />{selected && <section className="panel detail-panel"><div className="panel-heading"><h3>تفاصيل الفحص المقنّعة</h3><button className="icon-button" onClick={() => setSelected(null)}>إغلاق</button></div><div className="detail-grid"><div><span>النوع</span><strong>{selected.input_type}</strong></div><div><span>التصنيف</span><strong>{selected.classification || '—'}</strong></div><div><span>المدخل المقنّع</span><strong className="mono">{selected.input_value_masked || '[غير متاح]'}</strong></div></div><h4>الإشارات</h4><pre className="audit-json">{JSON.stringify(selected.signals || [], null, 2)}</pre><h4>التفسيرات</h4><pre className="audit-json">{JSON.stringify(selected.explanations || [], null, 2)}</pre></section>}</div>;
+}
+
+function FeedbackPage() {
+  const [rows, setRows] = useState([]); const [status, setStatus] = useState(''); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const load = () => { setLoading(true); setError(''); api.get('/feedback', { params: status ? { status } : {} }).then(({ data }) => setRows(data.data || [])).catch((e) => setError(e.response?.data?.detail || 'تعذر تحميل البلاغات')).finally(() => setLoading(false)); };
+  useEffect(() => { load(); }, [status]);
+  async function change(row) { const next = row.status === 'NEW' ? 'REVIEWED' : 'USED_FOR_ANALYSIS'; try { await api.patch(`/feedback/${row.id}/status`, { status: next, note: 'تمت المراجعة من لوحة الإدارة' }); load(); } catch (e) { setError(e.response?.data?.detail || 'تعذر تحديث البلاغ'); } }
+  const columns = [{ key: 'reported_classification', label: 'التصنيف المبلغ عنه' }, { key: 'status', label: 'الحالة' }, { key: 'comment', label: 'التعليق', render: (r) => r.comment || '—' }, { key: 'created_at', label: 'التاريخ', render: (r) => new Date(r.created_at).toLocaleString('ar') }, { key: 'actions', label: 'إجراء', render: (r) => <button className="row-action" onClick={() => change(r)}>تحديث الحالة</button> }];
+  return <div className="page-stack"><section className="panel filters"><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">كل الحالات</option><option>NEW</option><option>REVIEWED</option><option>USED_FOR_ANALYSIS</option></select></section><OpsTable title="بلاغات نتائج الفحص" eyebrow="Feedback Center" rows={rows} columns={columns} loading={loading} error={error} canPrev={false} canNext={false} /></div>;
+}
+
+function SupportPage() {
+  const [rows, setRows] = useState([]); const [status, setStatus] = useState(''); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [selected, setSelected] = useState(null); const [reply, setReply] = useState(''); const [replyStatus, setReplyStatus] = useState(''); const [busy, setBusy] = useState(false);
+  const load = () => { setLoading(true); setError(''); api.get('/support', { params: status ? { status } : {} }).then(({ data }) => setRows(data.data || [])).catch((e) => setError(e.response?.data?.detail || 'تعذر تحميل طلبات الدعم')).finally(() => setLoading(false)); };
+  useEffect(() => { load(); }, [status]);
+  function open(row) { setSelected(row); setReply(row.admin_reply || ''); setReplyStatus(row.status || 'OPEN'); setError(''); }
+  async function saveReply(event) { event.preventDefault(); if (!selected || (!reply.trim() && replyStatus === selected.status)) return; setBusy(true); setError(''); try { await api.patch(`/support/${selected.id}`, { status: replyStatus, priority: selected.priority, assign_to_me: true, reply: reply.trim() || null, note: 'رد من مركز الدعم' }); setSelected(null); load(); } catch (e) { setError(e.response?.data?.detail || 'تعذر حفظ الرد'); } finally { setBusy(false); } }
+  const columns = [{ key: 'subject', label: 'الموضوع' }, { key: 'priority', label: 'الأولوية' }, { key: 'status', label: 'الحالة' }, { key: 'email', label: 'البريد', render: (r) => r.email ? `${r.email.slice(0, 2)}***` : '—' }, { key: 'admin_reply', label: 'الرد', render: (r) => r.admin_reply ? 'تم الرد' : 'بانتظار الرد' }, { key: 'created_at', label: 'التاريخ', render: (r) => new Date(r.created_at).toLocaleString('ar') }, { key: 'actions', label: 'إجراء', render: (r) => <button className="row-action" onClick={() => open(r)}>{r.admin_reply ? 'فتح وتعديل' : 'فتح والرد'}</button> }];
+  return <div className="page-stack"><section className="panel filters"><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">كل الحالات</option><option>OPEN</option><option>IN_PROGRESS</option><option>RESOLVED</option><option>CLOSED</option></select></section><OpsTable title="طلبات الدعم" eyebrow="Support Center" rows={rows} columns={columns} loading={loading} error={error} canPrev={false} canNext={false} />{selected && <section className="panel support-reply-panel"><div className="panel-heading"><div><span className="eyebrow">رد المستخدم</span><h3>{selected.subject}</h3></div><button className="icon-button" type="button" onClick={() => setSelected(null)}>إغلاق</button></div><div className="support-message"><span>نص الطلب</span><p>{selected.message || '—'}</p></div><form className="support-reply-form" onSubmit={saveReply}><label>الحالة<select value={replyStatus} onChange={(e) => setReplyStatus(e.target.value)}><option>OPEN</option><option>IN_PROGRESS</option><option>RESOLVED</option><option>CLOSED</option></select></label><label>الرد الذي سيظهر في إشعارات المستخدم<textarea rows="6" value={reply} onChange={(e) => setReply(e.target.value)} maxLength="5000" placeholder="اكتب ردًا واضحًا للمستخدم..." /></label><button className="primary" disabled={busy}>{busy ? 'جارٍ الحفظ...' : 'حفظ الرد وإرسال الإشعار'}</button></form></section>}</div>;
+}
+
+function StatisticsPage() {
+  const [data, setData] = useState(null); const [days, setDays] = useState(30); const [error, setError] = useState('');
+  useEffect(() => { setData(null); api.get('/statistics/overview', { params: { range_days: days } }).then(({ data }) => setData(data.data)).catch((e) => setError(e.response?.data?.detail || 'تعذر تحميل الإحصائيات')); }, [days]);
+  if (error) return <section className="empty-state"><h2>تعذر تحميل الإحصائيات</h2><p>{error}</p></section>;
+  if (!data) return <div className="loading-state"><div className="loader" /> جارٍ تحميل الإحصائيات...</div>;
+  const c = data.counts; return <div className="page-stack"><section className="panel filters"><select value={days} onChange={(e) => setDays(Number(e.target.value))}><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يوماً</option><option value="90">آخر 90 يوماً</option></select></section><section className="stats-grid"><StatCard label="الفحوصات" value={c.scans} /><StatCard label="المكتملة" value={c.completed} tone="success" /><StatCard label="الفاشلة" value={c.failed} tone="warning" /><StatCard label="معدل التهديد" value={`${(c.threat_rate * 100).toFixed(1)}%`} tone="warning" /><StatCard label="البلاغات" value={c.feedback} /><StatCard label="الدعم" value={c.support} /></section><section className="panel"><span className="eyebrow">آخر تحديث</span><p>{new Date(data.generated_at).toLocaleString('ar')}</p><small>المؤشرات محسوبة في Backend مع حدود زمنية، ولا يتم تحميل البيانات الخام إلى المتصفح.</small></section></div>;
+}
+
+function BroadcastPage() {
+  const [title, setTitle] = useState(''); const [body, setBody] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState('');
+  async function submit(event) { event.preventDefault(); setBusy(true); setMessage(''); setError(''); try { const { data } = await api.post('/notifications/broadcast', { title, body }); setMessage(`تم إرسال الإشعار إلى ${data.data.recipient_count} مستخدم نشط.`); setTitle(''); setBody(''); } catch (e) { setError(e.response?.data?.detail || 'تعذر إرسال الإشعار'); } finally { setBusy(false); } }
+  return <section className="panel broadcast-panel"><div className="panel-heading"><div><span className="eyebrow">إشعارات المستخدمين</span><h2>إرسال إعلان عام</h2></div></div><p className="muted">سيظهر الإشعار داخل مركز إشعارات المستخدمين. الإرسال مقيد بصلاحية users.manage ويسجل في Audit Log.</p><form className="broadcast-form" onSubmit={submit}><label>العنوان<input value={title} onChange={(e) => setTitle(e.target.value)} maxLength="160" required /></label><label>نص الرسالة<textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength="5000" rows="7" required /></label><button className="primary" disabled={busy}>{busy ? 'جارٍ الإرسال...' : 'إرسال للمستخدمين النشطين'}</button></form>{message && <div className="notice success-notice">{message}</div>}{error && <div className="notice">{error}</div>}</section>;
+}

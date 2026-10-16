@@ -5,7 +5,9 @@ alter table public.feedback
   add column if not exists reviewed_by_admin_id uuid references public.admin_users(id) on delete set null;
 
 alter table public.support_requests
-  add column if not exists assigned_admin_id uuid references public.admin_users(id) on delete set null;
+  add column if not exists assigned_admin_id uuid references public.admin_users(id) on delete set null,
+  add column if not exists admin_reply text,
+  add column if not exists replied_at timestamptz;
 
 alter table public.account_deletion_requests
   add column if not exists processed_by_admin_id uuid references public.admin_users(id) on delete set null,
