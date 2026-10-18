@@ -105,11 +105,19 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
   const suspiciousPct = totalEngines > 0 ? ((vt.suspicious || 0) / totalEngines) * 100 : 0;
   const harmlessPct = totalEngines > 0 ? ((vt.harmless || 0) / totalEngines) * 100 : 0;
 
-  // Social engineering risk indicators derived from classification & fraud probability
+  // Social engineering risk indicators derived dynamically from AI research & text NLP analysis (0-100%)
   const numRisk = Number(fraudProb || 0);
-  const urgencyRisk = classification === 'DANGEROUS' ? 95 : classification === 'SUSPICIOUS' ? 65 : 5;
-  const credentialRisk = classification === 'DANGEROUS' ? 90 : classification === 'SUSPICIOUS' ? 55 : 2;
-  const spoofingRisk = classification === 'DANGEROUS' ? 98 : classification === 'SUSPICIOUS' ? 60 : 1;
+  const urgencyRisk = typeof exp?.urgency_pressure_score === 'number'
+    ? exp.urgency_pressure_score
+    : (classification === 'DANGEROUS' ? Math.min(100, Math.round(numRisk * 0.95)) : classification === 'SUSPICIOUS' ? Math.round(numRisk * 0.8) : 5);
+
+  const credentialRisk = typeof exp?.credential_theft_score === 'number'
+    ? exp.credential_theft_score
+    : (classification === 'DANGEROUS' ? Math.min(100, Math.round(numRisk * 0.90)) : classification === 'SUSPICIOUS' ? Math.round(numRisk * 0.7) : 2);
+
+  const spoofingRisk = typeof exp?.identity_spoofing_score === 'number'
+    ? exp.identity_spoofing_score
+    : (classification === 'DANGEROUS' ? Math.min(100, Math.round(numRisk * 0.98)) : classification === 'SUSPICIOUS' ? Math.round(numRisk * 0.75) : 1);
 
   const handleCopyReport = () => {
     if (isGuest || !navigator.clipboard?.writeText) return;

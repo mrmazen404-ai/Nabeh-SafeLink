@@ -43,3 +43,24 @@ def test_local_sms_analysis_known_brand_matches_official_portal():
     res = _local_sms_analysis(text_content=kuraimi_text, extracted_url="https://kuraimi-fake.com/login", language="ar")
     assert res["official_portal_url"] == "https://www.kuraimibank.com"
 
+
+def test_dynamic_social_engineering_risk_scores():
+    # 1. Benign normal greeting
+    benign_res = _local_sms_analysis(text_content="مرحباً أهلاً وسهلاً بك", extracted_url="", language="ar")
+    assert benign_res["urgency_pressure_score"] <= 10
+    assert benign_res["credential_theft_score"] <= 5
+    assert benign_res["identity_spoofing_score"] <= 5
+
+    # 2. Text with urgency pressure ("مهلة ساعة فوري")
+    urgency_res = _local_sms_analysis(text_content="عاجل فوري مهلة ساعة واحدة لإتمام الإجراء", extracted_url="", language="ar")
+    assert urgency_res["urgency_pressure_score"] >= 60
+
+    # 3. Text with OTP & credential theft ("رمز OTP كلمة المرور")
+    otp_res = _local_sms_analysis(text_content="أدخل رمز OTP وكلمة المرور لتأكيد الحساب", extracted_url="", language="ar")
+    assert otp_res["credential_theft_score"] >= 60
+
+    # 4. Text with brand spoofing ("مصرف الراجحي")
+    brand_res = _local_sms_analysis(text_content="تنبيه من مصرف الراجحي بخصوص بطاقتك", extracted_url="", language="ar")
+    assert brand_res["identity_spoofing_score"] >= 75
+
+

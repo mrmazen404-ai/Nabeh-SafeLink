@@ -241,6 +241,9 @@ Respond ONLY in valid JSON matching this exact structure:
   "classification": "SAFE" | "SUSPICIOUS" | "DANGEROUS",
   "confidence": float between 0.5 and 1.0,
   "fraud_probability": float between 0.0 and 1.0,
+  "urgency_pressure_score": integer between 0 and 100 assessing artificial time pressure/urgency,
+  "credential_theft_score": integer between 0 and 100 assessing requests for OTP/passwords/IDs/sensitive data,
+  "identity_spoofing_score": integer between 0 and 100 assessing impersonation of official brands/entities,
   "claimed_sender": "string describing claimed organization/sender in requested language",
   "official_domain": "string stating official domain name (e.g. alrajhibank.com.sa)",
   "official_portal_url": "string stating exact official portal HTTPS URL (e.g. https://www.absher.sa)",
@@ -405,10 +408,50 @@ def _local_sms_analysis(text_content: str, extracted_url: str = "", language: st
             "إعادة إرسال الرسالة إلى الرقم الموحد للإبلاغ عن الاحتيال (330330) في السعودية." if is_ar else "Report the scam message to official anti-fraud numbers."
         ]
 
+    # Calculate social engineering risk scores dynamically (0-100)
+    urgency_words = ("ساعة", "ساعات", "فوري", "عاجل", "الآن", "تجميد", "إيقاف", "مهلة", "خلال", "فورا", "فوراً", "انتهى")
+    urgency_count = sum(1 for w in urgency_words if w in text_content)
+    if urgency_count >= 2:
+        urgency_score = min(98, 80 + urgency_count * 8)
+    elif urgency_count == 1:
+        urgency_score = 65
+    elif has_phishing_keywords:
+        urgency_score = 45
+    else:
+        urgency_score = 5
+
+    credential_words = ("otp", "رمز", "كلمة المرور", "بطاقة", "هوية", "الهويه", "حسابك", "تسجيل", "بيانات", "السرية", "تحويل")
+    credential_count = sum(1 for w in credential_words if w in text_content.lower())
+    if credential_count >= 2:
+        credential_score = min(98, 75 + credential_count * 8)
+    elif credential_count == 1:
+        credential_score = 60
+    elif has_url and has_phishing_keywords:
+        credential_score = 50
+    else:
+        credential_score = 2
+
+    matched_brand = False
+    full_haystack = f"{text_content} {extracted_url}".lower()
+    for key, (name_ar, name_en, off_dom) in KNOWN_BRANDS.items():
+        if key in full_haystack or name_ar in text_content or name_en.lower() in full_haystack or off_dom in full_haystack:
+            matched_brand = True
+            break
+
+    if matched_brand:
+        spoofing_score = 98 if (has_phishing_keywords or has_url) else 80
+    elif has_phishing_keywords:
+        spoofing_score = 60
+    else:
+        spoofing_score = 1
+
     return {
         "classification": classification,
         "confidence": confidence,
         "fraud_probability": fraud_prob,
+        "urgency_pressure_score": urgency_score,
+        "credential_theft_score": credential_score,
+        "identity_spoofing_score": spoofing_score,
         "lure_type": lure_type,
         "summary": summary,
         "reasons": reasons,

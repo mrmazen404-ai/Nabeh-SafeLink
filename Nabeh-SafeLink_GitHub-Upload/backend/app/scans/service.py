@@ -453,6 +453,9 @@ class ScanService:
             "lure_type": ai_analysis.get("lure_type", "غير محدد"),
             "authenticity_status": ai_analysis.get("authenticity_status", "UNKNOWN"),
             "fraud_probability": fraud_prob,
+            "urgency_pressure_score": ai_analysis.get("urgency_pressure_score"),
+            "credential_theft_score": ai_analysis.get("credential_theft_score"),
+            "identity_spoofing_score": ai_analysis.get("identity_spoofing_score"),
         }
 
         return {
