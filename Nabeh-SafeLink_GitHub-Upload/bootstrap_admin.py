@@ -4,15 +4,26 @@ import json
 import requests
 
 # Target host can be overridden via environment variable or command line argument
-default_host = "https://intellidefenda.com"
+default_host = "https://www.intellidefenda.com"
 target_host = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else os.getenv("TARGET_HOST", default_host).rstrip("/")
 
 URL = f"{target_host}/api/v1/admin/auth/bootstrap"
-BOOTSTRAP_TOKEN = os.getenv("ADMIN_BOOTSTRAP_TOKEN", "E4_d2Qu1WLALLTmq-YiP233leU3teXh47OTGtvuurJgIsZwe-V6o0Iyz3EXaDL44")
+BOOTSTRAP_TOKEN = os.getenv("ADMIN_BOOTSTRAP_TOKEN", "").strip()
 
-EMAIL = os.getenv("ADMIN_EMAIL", "mr.mazenn404@gmail.com")
-DISPLAY_NAME = os.getenv("ADMIN_NAME", "System Administrator")
-PASSWORD = os.getenv("ADMIN_PASSWORD", "Mr!Mazen@2026#Secure")
+EMAIL = os.getenv("ADMIN_EMAIL", "").strip()
+DISPLAY_NAME = os.getenv("ADMIN_NAME", "").strip()
+PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+
+missing = [
+    name for name, value in {
+        "ADMIN_BOOTSTRAP_TOKEN": BOOTSTRAP_TOKEN,
+        "ADMIN_EMAIL": EMAIL,
+        "ADMIN_NAME": DISPLAY_NAME,
+        "ADMIN_PASSWORD": PASSWORD,
+    }.items() if not value
+]
+if missing:
+    raise SystemExit("Missing required environment variables: " + ", ".join(missing))
 
 headers = {
     "Content-Type": "application/json",
