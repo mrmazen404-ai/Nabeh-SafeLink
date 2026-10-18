@@ -352,18 +352,24 @@ def _local_sms_analysis(text_content: str, extracted_url: str = "", language: st
         "متى الموعد", "الله يعطيك العافية", "جزاك الله خير",
         "عيد مبارك", "كل عام وأنتم بخير", "الحمد لله", "هلا"
     )
+    phishing_keywords = (
+        "حسابك", "البنك", "تجميد", "تحديث", "كلمة المرور", "بطاقة", "جائزة",
+        "مبروك", "الفوز", "رمز", "إيقاف", "الراجحي", "الأهلي", "الإنماء",
+        "سداد", "غرامة", "ربح", "تأكيد", "انقر", "اضغط"
+    )
     has_greeting = any(g in text_content for g in safe_greetings)
+    has_phishing_keywords = any(word in text_content.lower() or word in text_content for word in phishing_keywords)
     has_url = bool(extracted_url)
 
-    if not has_url and (has_greeting or len(text_content.strip()) <= 120):
+    if not has_url and (has_greeting or not has_phishing_keywords or len(text_content.strip()) <= 120):
         classification = "SAFE"
-        confidence = 0.99
+        confidence = 0.99 if (has_greeting or not has_phishing_keywords) else 0.95
         fraud_prob = 0.01
         lure_type = "رسالة عادية آمنة" if is_ar else "Safe Normal Message"
-        summary = "الرسالة عبارة عن تواصل شخصي أو تحية عادية خالية من أي مؤشرات احتيال أو روابط مشبوهة." if is_ar else "Innocent message containing no fraudulent lures or suspicious links."
+        summary = "الرسالة عبارة عن تواصل شخصي أو نص عادي خالي من أي مؤشرات احتيال أو روابط مشبوهة." if is_ar else "Innocent message containing no fraudulent lures or suspicious links."
         reasons = [
             "خلو الرسالة من روابط استدراجية أو طلبات إدخال بيانات بنكية." if is_ar else "Message contains no phishing links or requests for credentials.",
-            "نص الرسالة يتضمن تحية شخصية أو تواصل اعتيادي آمن." if is_ar else "Message contains standard safe personal communication."
+            "نص الرسالة خالي من الأنماط والكلمات الاحتيالية المشبوهة." if is_ar else "Message contains no suspicious phishing patterns."
         ]
         recommendation = "رسالة آمنة لا تتطلب أي إجراء." if is_ar else "Safe message requiring no action."
         official_portal = "غير متاح"
@@ -382,7 +388,16 @@ def _local_sms_analysis(text_content: str, extracted_url: str = "", language: st
             "وجود رابط مضمن يتطلب الفحص الأمني عبر المحركات." if is_ar else "Embedded URL detected requiring security audit.",
         ]
         recommendation = "تحقق من المصدر الرسمي للرسالة ولا تدخل بياناتك الحسّاسة." if is_ar else "Verify the official source and do not enter sensitive info."
-        official_portal = "https://www.my.gov.sa"
+        
+        # Match against known verified brands; strictly return "غير متاح" if no known brand is found
+        matched_portal = None
+        full_haystack = f"{text_content} {extracted_url}".lower()
+        for key, (_, _, off_dom) in KNOWN_BRANDS.items():
+            if key in full_haystack:
+                matched_portal = f"https://www.{off_dom}" if not off_dom.startswith("http") else off_dom
+                break
+
+        official_portal = matched_portal or "غير متاح"
         claim_verdict = "ادعاء مريب يحاكي أسلوب الاستدراج لحث المستخدم على التفاعل الفوري." if is_ar else "Suspicious lure attempt seeking immediate interaction."
         action_steps = [
             "تجنب النقر على أي رابط مرفق أو الاتصال بالرقم المرسل." if is_ar else "Avoid clicking links or calling the sender.",
@@ -421,6 +436,8 @@ KNOWN_BRANDS = {
     "alahli": ("البنك الأهلي SNB", "SNB AlAhli", "snb.com.sa"),
     "snb": ("البنك الأهلي SNB", "SNB AlAhli", "snb.com.sa"),
     "alinma": ("مصرف الإنماء", "Alinma Bank", "alinma.com"),
+    "kuraimi": ("بنك الكريمي", "Kuraimi Bank", "kuraimibank.com"),
+    "kuraimibank": ("بنك الكريمي", "Kuraimi Bank", "kuraimibank.com"),
     "paypal": ("PayPal", "PayPal", "paypal.com"),
     "paypa1": ("PayPal (انتحال اسم)", "PayPal (Impersonated)", "paypal.com"),
     "google": ("Google", "Google", "google.com"),

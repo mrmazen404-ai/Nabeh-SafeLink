@@ -114,16 +114,20 @@ async def _submit_url(url: str, client: httpx.AsyncClient) -> Dict[str, Any]:
                 "error": f"Submit failed: HTTP {response.status_code}",
             }
 
-        await asyncio.sleep(10)
-
         url_id = _url_id(url)
         get_endpoint = f"{VIRUSTOTAL_BASE_URL}/urls/{url_id}"
-        get_response = await client.get(get_endpoint, headers=_get_headers())
-        if get_response.status_code == 200:
-            result = _parse_response(get_response.json())
-            log_event(logger, logging.INFO, "virustotal_submit_succeeded", target_id=target_id, status=result.get("status"))
-            return result
-        log_event(logger, logging.WARNING, "virustotal_analysis_pending", target_id=target_id, status=get_response.status_code)
+
+        # Resilient short-polling loop: poll up to 3 attempts every 1.5 seconds (max 4.5 seconds)
+        for attempt in range(3):
+            await asyncio.sleep(1.5)
+            get_response = await client.get(get_endpoint, headers=_get_headers())
+            if get_response.status_code == 200:
+                result = _parse_response(get_response.json())
+                if result.get("status") != "UNKNOWN":
+                    log_event(logger, logging.INFO, "virustotal_submit_succeeded", target_id=target_id, status=result.get("status"), attempt=attempt + 1)
+                    return result
+
+        log_event(logger, logging.WARNING, "virustotal_analysis_pending", target_id=target_id)
         return {
             "status": "UNKNOWN",
             "confidence": 0.0,

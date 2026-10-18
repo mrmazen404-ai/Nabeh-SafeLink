@@ -82,7 +82,22 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
     if (provider.includes('GEMINI')) return lang === 'ar' ? 'تحليل الذكاء الاصطناعي' : 'AI security analysis';
     return lang === 'ar' ? 'تحليل أمني' : 'Security analysis';
   })();
-  const officialPortal = exp?.official_portal_url && exp.official_portal_url !== 'غير متاح' ? exp.official_portal_url : null;
+  const isInvalidOrGenericPortal = (url) => {
+    if (!url) return true;
+    const lower = String(url).toLowerCase().trim();
+    return (
+      lower === 'غير متاح' ||
+      lower === 'n/a' ||
+      lower === 'not applicable' ||
+      lower === 'none' ||
+      lower === 'null' ||
+      lower === 'undefined' ||
+      lower === 'غير انطباقي' ||
+      lower === 'لا يوجد'
+    );
+  };
+  const rawPortal = exp?.official_portal_url;
+  const officialPortal = rawPortal && !isInvalidOrGenericPortal(rawPortal) ? rawPortal : null;
   const actionSteps = Array.isArray(exp?.action_plan_steps) && exp.action_plan_steps.length > 0 ? exp.action_plan_steps : [];
 
   const totalEngines = vt.total_engines || 0;

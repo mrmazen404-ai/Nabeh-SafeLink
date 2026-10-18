@@ -30,8 +30,24 @@ class ScanPersistenceError(Exception):
 class ScanService:
     @staticmethod
     def extract_url_from_text(text: str) -> str:
-        match = re.search(r"https?://[^\s]+|www\.[^\s]+", text)
-        return match.group(0) if match else ""
+        if not text:
+            return ""
+        # 1. Match explicit scheme or www. prefix
+        explicit_match = re.search(r"(?:https?://|www\.)[^\s,;\"'<>()]+", text, re.IGNORECASE)
+        if explicit_match:
+            return explicit_match.group(0).rstrip(".,;:!?'\")")
+
+        # 2. Match naked domains with standard high-use TLDs
+        tld_pattern = (
+            r"\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+"
+            r"(?:com|sa|org|net|info|gov|edu|biz|xyz|top|site|online|store|shop|me|co|io|app|ai|vip|tech|live|cc|tv|so|link|page|cloud|click)"
+            r"(?:/[^\s,;\"'<>()]*)?"
+        )
+        naked_match = re.search(tld_pattern, text, re.IGNORECASE)
+        if naked_match:
+            return naked_match.group(0).rstrip(".,;:!?'\")")
+
+        return ""
 
     @staticmethod
     def analyze_text_phishing(text: str, has_embedded_url: bool = False) -> dict:
@@ -53,6 +69,9 @@ class ScanService:
         elif has_safe_greeting or (not has_embedded_url and len(text.strip()) <= 120):
             # Safe everyday greetings or normal short messages with no phishing keywords are SAFE 100%
             classification, confidence = "SAFE", 0.99
+        elif not has_embedded_url and len(matches) == 0:
+            # Normal text with no embedded URL and no phishing keywords is SAFE
+            classification, confidence = "SAFE", 0.95
         else:
             classification, confidence = "UNKNOWN", None
 
