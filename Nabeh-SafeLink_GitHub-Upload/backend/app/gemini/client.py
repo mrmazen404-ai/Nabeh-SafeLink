@@ -314,6 +314,7 @@ Respond ONLY in valid JSON matching the requested structure.
 
                 parsed = json.loads(text_clean)
                 parsed["provider"] = f"GEMINI_SEARCH ({model_name})"
+                parsed = _sanitize_official_portal_url(parsed, text_content, extracted_url)
                 log_event(logger, logging.INFO, "gemini_sms_analysis_succeeded", operation_id=operation_id, model=model_name, mode="search")
                 return parsed
             except Exception as error:
@@ -336,13 +337,34 @@ Respond ONLY in valid JSON matching the requested structure.
 
                 parsed = json.loads(text_clean)
                 parsed["provider"] = f"GEMINI_AI ({model_name})"
+                parsed = _sanitize_official_portal_url(parsed, text_content, extracted_url)
                 log_event(logger, logging.INFO, "gemini_sms_analysis_succeeded", operation_id=operation_id, model=model_name, mode="json")
                 return parsed
             except Exception as error:
                 log_event(logger, logging.WARNING, "gemini_sms_json_attempt_failed", operation_id=operation_id, model=model_name, error_type=safe_error(error))
                 continue
 
-    return _local_sms_analysis(text_content, extracted_url, language, evidence)
+    return _sanitize_official_portal_url(_local_sms_analysis(text_content, extracted_url, language, evidence), text_content, extracted_url)
+
+
+def _sanitize_official_portal_url(parsed: dict, text_content: str, extracted_url: str) -> dict:
+    if not isinstance(parsed, dict):
+        return parsed
+
+    full_haystack = f"{text_content} {extracted_url}".lower()
+    matched_official_portal = None
+    for key, (name_ar, name_en, off_dom) in KNOWN_BRANDS.items():
+        if key in full_haystack or name_ar in text_content or name_en.lower() in full_haystack or off_dom in full_haystack:
+            matched_official_portal = f"https://www.{off_dom}" if not off_dom.startswith("http") else off_dom
+            break
+
+    if matched_official_portal:
+        parsed["official_portal_url"] = matched_official_portal
+    else:
+        # Strictly force "غير متاح" when no known verified brand is in the message
+        parsed["official_portal_url"] = "غير متاح"
+
+    return parsed
 
 
 def _local_sms_analysis(text_content: str, extracted_url: str = "", language: str = "ar", evidence: dict | None = None) -> dict:

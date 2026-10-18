@@ -9,4 +9,3 @@ print("ADMIN_BOOTSTRAP_TOKEN=" + secrets.token_urlsafe(48))   # ← هذا هو 
 print("ADMIN_IP_SALT=" + secrets.token_urlsafe(48))
 print("NABEH_RATE_LIMIT_SALT=" + secrets.token_urlsafe(48))
 print("ADMIN_TOTP_ENCRYPTION_KEY=" + Fernet.generate_key().decode())
-PY

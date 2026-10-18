@@ -64,3 +64,18 @@ def test_dynamic_social_engineering_risk_scores():
     assert brand_res["identity_spoofing_score"] >= 75
 
 
+def test_sanitize_official_portal_url_removes_generic_hallucinations():
+    from app.gemini.client import _sanitize_official_portal_url
+
+    # 1. Hallucinated portal in a message without a known brand -> forced to "غير متاح"
+    hallucinated_payload = {"official_portal_url": "https://www.my.gov.sa", "summary": "Test"}
+    cleaned_1 = _sanitize_official_portal_url(hallucinated_payload, "رسالة عادية لا تنتمي لأي جهة", "")
+    assert cleaned_1["official_portal_url"] == "غير متاح"
+
+    # 2. Known brand mentioned -> sanitized to exact verified brand portal
+    kuraimi_payload = {"official_portal_url": "https://fake.com", "summary": "Test"}
+    cleaned_2 = _sanitize_official_portal_url(kuraimi_payload, "تحديث حسابك في بنك الكريمي", "https://fake-link.com")
+    assert cleaned_2["official_portal_url"] == "https://www.kuraimibank.com"
+
+
+
