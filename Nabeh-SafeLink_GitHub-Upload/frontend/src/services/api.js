@@ -1,9 +1,24 @@
 import axios from 'axios';
 import { getAccessToken } from './authToken';
 
-const API_URL = import.meta.env.VITE_API_URL || (
+const configuredApiUrl = import.meta.env.VITE_API_URL || (
   import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1'
 );
+
+const API_URL = (() => {
+  if (!import.meta.env.PROD || typeof window === 'undefined') return configuredApiUrl;
+  try {
+    const configured = new URL(configuredApiUrl, window.location.origin);
+    const pageHost = window.location.hostname.toLowerCase();
+    const apiHost = configured.hostname.toLowerCase();
+    const wwwMismatch = (pageHost === 'www.intellidefenda.com' && apiHost === 'intellidefenda.com') ||
+      (pageHost === 'intellidefenda.com' && apiHost === 'www.intellidefenda.com');
+    if (wwwMismatch) return configured.pathname.replace(/\/+$/, '') || '/api/v1';
+  } catch {
+    // Preserve the configured value so the existing HTTPS validation can fail clearly.
+  }
+  return configuredApiUrl;
+})();
 
 if (
   import.meta.env.PROD &&
