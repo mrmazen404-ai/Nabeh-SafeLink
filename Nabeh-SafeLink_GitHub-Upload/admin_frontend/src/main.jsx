@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import axios from 'axios';
 import './style.css';
+import SystemSettingsPage from './SystemSettingsPage';
 
 const api = axios.create({ baseURL: import.meta.env.VITE_ADMIN_API_URL || '/api/v1/admin', timeout: 20000 });
 const accessKey = 'nabeh_admin_access_token';
@@ -49,6 +50,7 @@ const navItems = [
   { path: '/feedback', label: 'البلاغات', icon: '!', permission: 'feedback.read' },
   { path: '/support', label: 'الدعم', icon: '?', permission: 'support.read' },
   { path: '/broadcast', label: 'إشعار عام', icon: '✦', permission: 'users.manage' },
+  { path: '/settings', label: 'إعدادات النظام', icon: '⚙', permission: 'settings.read' },
 ];
 
 function currentPath() { return window.location.pathname || '/dashboard'; }
@@ -170,6 +172,7 @@ function UsersPage() {
 
 function ProtectedPage({ profile, path, go }) {
   if (path === '/dashboard' || path === '/') return <Dashboard profile={profile} go={go} />;
+  if (path === '/settings') return <SystemSettingsPage profile={profile} api={api} />;
   if (path === '/sessions') return <SessionsPage />;
   if (path === '/audit-logs') return <AuditPage />;
   if (path === '/users') return <UsersPage />;

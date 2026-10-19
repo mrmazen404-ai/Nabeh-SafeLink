@@ -8,6 +8,7 @@ from app.auth.security import AuthSecurityError, get_authenticated_user
 from app.security.guest_rate_limit import enforce_guest_rate_limit
 from app.scans.service import ScanPersistenceError, ScanService
 from app.db.supabase_client import supabase
+from app.system_settings import SystemSettingsUnavailable, setting_enabled
 
 router = APIRouter()
 
@@ -59,6 +60,12 @@ async def create_guest_scan(
     _: None = Depends(enforce_guest_rate_limit),
 ):
     """Run ML, VirusTotal, and Gemini for the guest without persistence."""
+    try:
+        guest_scanning_enabled = setting_enabled("features.guest_scans_enabled")
+    except SystemSettingsUnavailable:
+        raise HTTPException(status_code=503, detail="تعذر التحقق من إعدادات الفحص") from None
+    if not guest_scanning_enabled:
+        raise HTTPException(status_code=403, detail="فحص الضيف متوقف حالياً؛ سجّل الدخول لاستخدام الفحص")
     raw_input = _validate_input(request)
     response.headers["Cache-Control"] = "no-store, private"
     response.headers["Pragma"] = "no-cache"

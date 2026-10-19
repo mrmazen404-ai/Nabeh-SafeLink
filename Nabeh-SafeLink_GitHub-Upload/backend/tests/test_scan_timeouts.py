@@ -12,6 +12,7 @@ async def test_text_scan_uses_local_fallback_when_ai_times_out(monkeypatch):
         await asyncio.sleep(0.05)
 
     monkeypatch.setattr(service, "analyze_sms_message", hanging_analysis)
+    monkeypatch.setattr(service, "setting_enabled_fail_closed", lambda _key: True)
     monkeypatch.setattr(settings, "SCAN_AI_TIMEOUT_SECONDS", 0.001)
 
     result = await service.ScanService.process_text_scan("السلام عليكم", language="ar")

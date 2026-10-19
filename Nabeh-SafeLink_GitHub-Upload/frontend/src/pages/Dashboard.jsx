@@ -27,7 +27,7 @@ function ClassificationBadge({ value, t }) {
 }
 
 export default function Dashboard({ activeTab, setActiveTab, onNavigateAuth }) {
-  const { dir, t, lang } = useLanguage();
+  const { dir, t, lang, canChangeLanguage } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, logout } = useAuth();
@@ -163,7 +163,9 @@ export default function Dashboard({ activeTab, setActiveTab, onNavigateAuth }) {
   async function saveProfile(event) {
     event.preventDefault(); setLoading(true); setMessage('');
     try {
-      const result = await api.patch('/dashboard/profile', profile, authConfig());
+      const payload = { ...profile };
+      if (!canChangeLanguage) delete payload.preferred_language;
+      const result = await api.patch('/dashboard/profile', payload, authConfig());
       setProfile(result.data?.data || profile);
       setMessage(lang === 'ar' ? 'تم تحديث الملف الشخصي بنجاح.' : 'Profile updated successfully.');
     } catch {
@@ -457,7 +459,7 @@ export default function Dashboard({ activeTab, setActiveTab, onNavigateAuth }) {
               </label>
               <label style={{ display: 'grid', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--color-text-secondary)' }}>
                 {t('dashboard.profileSection.language')}
-                <select value={profile.preferred_language || 'ar'} onChange={(e) => setProfile({ ...profile, preferred_language: e.target.value })} style={{ padding: '14px', background: 'var(--color-bg)', border: '1px solid var(--color-border-strong)', borderRadius: '12px', font: 'inherit', color: 'var(--color-text)' }}>
+                <select disabled={!canChangeLanguage} value={profile.preferred_language || 'ar'} onChange={(e) => setProfile({ ...profile, preferred_language: e.target.value })} style={{ padding: '14px', background: 'var(--color-bg)', border: '1px solid var(--color-border-strong)', borderRadius: '12px', font: 'inherit', color: 'var(--color-text)' }}>
                   <option value="ar">العربية</option>
                   <option value="en">English</option>
                 </select>

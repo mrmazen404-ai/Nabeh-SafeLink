@@ -30,6 +30,7 @@ from app.config import settings
 from app.db.supabase_client import supabase
 from app.observability import log_event, mask_email
 from app.security.guest_rate_limit import UpstashRateLimiter, client_identity
+from app.system_settings import SystemSettingsUnavailable, get_system_settings, setting_enabled
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -180,6 +181,12 @@ def _generic_auth_message() -> str:
 
 @router.post("/register")
 async def register(request: RegisterRequest):
+    try:
+        registration_enabled = setting_enabled("features.registration_enabled")
+    except SystemSettingsUnavailable:
+        raise HTTPException(status_code=503, detail="تعذر التحقق من حالة التسجيل حالياً") from None
+    if not registration_enabled:
+        raise HTTPException(status_code=403, detail="التسجيل الجديد متوقف حالياً بقرار من إدارة النظام")
     email = normalize_email(str(request.email))
     log_event(logger, logging.INFO, "registration_started", recipient=mask_email(email))
     display_name = request.display_name.strip()
@@ -361,13 +368,17 @@ async def verify_otp(request: VerifyOtpRequest, response: Response):
 
                 # NOW CREATE AND INSERT THE VERIFIED USER RECORD IN CUSTOM_USERS!
                 user_id = str(uuid4())
+                try:
+                    default_language = get_system_settings().get("ui.default_language", "ar")
+                except SystemSettingsUnavailable:
+                    raise HTTPException(status_code=503, detail="تعذر تهيئة تفضيلات الحساب حالياً") from None
                 user = {
                     "id": user_id,
                     "email": email,
                     "display_name": display_name,
                     "password_hash": password_hash,
                     "email_verified": True,
-                    "preferred_language": "ar",
+                    "preferred_language": default_language,
                     "created_at": _now().isoformat(),
                     "updated_at": _now().isoformat(),
                 }

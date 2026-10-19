@@ -16,6 +16,7 @@ from app.auth.security import AuthSecurityError, get_authenticated_user, hash_pa
 from app.db.supabase_client import supabase
 from app.observability import log_event, mask_email
 from app.dashboard.realtime import manager
+from app.system_settings import SystemSettingsUnavailable, setting_enabled
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -268,6 +269,13 @@ async def get_profile(response: Response, authorization: Optional[str] = Header(
 async def update_profile(payload: ProfileUpdate, response: Response, authorization: Optional[str] = Header(None)):
     user = _require_user(authorization)
     user_id = str(user["id"])
+    if payload.preferred_language is not None:
+        try:
+            language_override_enabled = await asyncio.to_thread(setting_enabled, "ui.allow_language_override")
+        except SystemSettingsUnavailable:
+            raise HTTPException(status_code=503, detail="تعذر التحقق من إعدادات اللغة") from None
+        if not language_override_enabled:
+            raise HTTPException(status_code=403, detail="تغيير اللغة متوقف حالياً بقرار من إدارة النظام")
     user_update = {}
     if payload.display_name is not None:
         user_update["display_name"] = payload.display_name.strip()

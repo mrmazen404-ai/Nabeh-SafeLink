@@ -58,7 +58,7 @@ function ChevronDownIcon({ size = 14, color = 'currentColor' }) {
 }
 
 export default function LanguageSwitcher() {
-  const { lang, setLanguage, t } = useLanguage();
+  const { lang, setLanguage, canChangeLanguage, t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
 
@@ -91,6 +91,8 @@ export default function LanguageSwitcher() {
   }, [isOpen]);
 
   const currentLabel = lang === 'ar' ? 'العربية' : 'English';
+
+  if (!canChangeLanguage) return null;
 
   return (
     <div className="lang-switcher-container" ref={containerRef}>

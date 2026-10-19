@@ -1,9 +1,12 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useRuntimeConfig } from './RuntimeConfigContext';
 
 const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
+  const { config } = useRuntimeConfig();
   const [theme, setThemeState] = useState(() => {
+    if (!config.allow_theme_override) return config.default_theme;
     try {
       const savedTheme = localStorage.getItem('safelink_theme');
       if (savedTheme === 'dark' || savedTheme === 'light') {
@@ -12,22 +15,36 @@ export function ThemeProvider({ children }) {
     } catch (e) {
       console.error('Error reading theme from localStorage', e);
     }
-    return 'light';
+    return config.default_theme;
   });
 
   const [animatingTheme, setAnimatingTheme] = useState(null);
   const timeoutRef = useRef(null);
 
   useEffect(() => {
+    if (!config.allow_theme_override) {
+      setThemeState(config.default_theme);
+      return;
+    }
+    try {
+      const savedTheme = localStorage.getItem('safelink_theme');
+      setThemeState(savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : config.default_theme);
+    } catch {
+      setThemeState(config.default_theme);
+    }
+  }, [config.allow_theme_override, config.default_theme]);
+
+  useEffect(() => {
     try {
       document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('safelink_theme', theme);
+      if (config.allow_theme_override) localStorage.setItem('safelink_theme', theme);
     } catch (e) {
       console.error('Error saving theme to localStorage', e);
     }
-  }, [theme]);
+  }, [theme, config.allow_theme_override]);
 
   const toggleTheme = useCallback(() => {
+    if (!config.allow_theme_override) return;
     setThemeState((prevTheme) => {
       const nextTheme = prevTheme === 'dark' ? 'light' : 'dark';
 
@@ -41,9 +58,10 @@ export function ThemeProvider({ children }) {
 
       return nextTheme;
     });
-  }, []);
+  }, [config.allow_theme_override]);
 
   const setTheme = useCallback((newTheme) => {
+    if (!config.allow_theme_override) return;
     if (newTheme === 'dark' || newTheme === 'light') {
       setThemeState(newTheme);
       setAnimatingTheme(newTheme);
@@ -52,10 +70,10 @@ export function ThemeProvider({ children }) {
         setAnimatingTheme(null);
       }, 650);
     }
-  }, []);
+  }, [config.allow_theme_override]);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, canChangeTheme: config.allow_theme_override }}>
       {children}
       {animatingTheme && (
         <div className={`theme-cloud-overlay ${animatingTheme}-cloud-active`} aria-hidden="true">

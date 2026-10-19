@@ -9,8 +9,8 @@ import HelpMenu from './HelpMenu';
 
 export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
   const { user, isGuest, logout } = useAuth();
-  const { lang, dir, toggleLanguage, t } = useLanguage();
-  const { theme, toggleTheme } = useTheme();
+  const { lang, dir, toggleLanguage, canChangeLanguage, t } = useLanguage();
+  const { theme, toggleTheme, canChangeTheme } = useTheme();
   const navigate = useNavigate();
   const navItems = isGuest
     ? [
@@ -59,7 +59,7 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
 
         <div className="header-actions">
           <HelpMenu activeTab={activeTab} setActiveTab={setActiveTab} />
-          <button
+          {canChangeLanguage && <button
             type="button"
             className="header-preference-btn"
             onClick={toggleLanguage}
@@ -68,8 +68,8 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
           >
             <GlobeIcon size={15} />
             <span>{lang === 'ar' ? 'English' : 'العربية'}</span>
-          </button>
-          <button
+          </button>}
+          {canChangeTheme && <button
             type="button"
             className="header-preference-btn header-theme-btn"
             onClick={toggleTheme}
@@ -77,7 +77,7 @@ export default function Header({ activeTab, setActiveTab, onNavigateAuth }) {
             title={t('auth.toggleTheme')}
           >
             {theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}
-          </button>
+          </button>}
           {!isGuest && user ? (
             <div className="header-user-group">
               <button

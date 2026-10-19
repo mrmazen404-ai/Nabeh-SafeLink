@@ -31,8 +31,14 @@ def _validated_model_result(
 ) -> dict:
     fallback = _local_explanation(classification, language, input_value=input_value, evidence=evidence)
     result = validate_gemini_payload(parsed, fallback=fallback)
+    result = _sanitize_official_portal_url(result, input_value, input_value)
     result["provider"] = f"{provider} ({model_name})"
     return result
+
+
+def _sanitized_local_explanation(classification: str, language: str, input_value: str, evidence: dict) -> dict:
+    local = _local_explanation(classification, language, input_value=input_value, evidence=evidence)
+    return _sanitize_official_portal_url(local, input_value, input_value)
 
 
 def _get_api_key() -> str:
@@ -127,12 +133,12 @@ Respond ONLY in valid JSON matching this exact structure:
     current_key = _get_api_key()
     if not current_key:
         log_event(logger, logging.WARNING, "gemini_provider_not_configured", operation_id=operation_id)
-        return _local_explanation(classification, language, input_value=input_value, evidence=evidence)
+        return _sanitized_local_explanation(classification, language, input_value, evidence)
 
     gemini_client = _get_client()
     if gemini_client is None:
         log_event(logger, logging.WARNING, "gemini_client_unavailable", operation_id=operation_id)
-        return _local_explanation(classification, language, input_value=input_value, evidence=evidence)
+        return _sanitized_local_explanation(classification, language, input_value, evidence)
 
     # Multi-tier model fallback cascade: iterates through every model until a successful response
     for model_name in PRIMARY_MODELS:
@@ -216,7 +222,7 @@ Respond ONLY in valid JSON matching this exact structure:
             continue
 
     log_event(logger, logging.WARNING, "gemini_provider_fallback_used", operation_id=operation_id)
-    return _local_explanation(classification, language, input_value=input_value, evidence=evidence)
+    return _sanitized_local_explanation(classification, language, input_value, evidence)
 
 
 SMS_SYSTEM_INSTRUCTION = """
@@ -347,22 +353,39 @@ Respond ONLY in valid JSON matching the requested structure.
     return _sanitize_official_portal_url(_local_sms_analysis(text_content, extracted_url, language, evidence), text_content, extracted_url)
 
 
+def _matched_known_brand_domain(text_content: str, extracted_url: str) -> str | None:
+    haystack = f"{text_content} {extracted_url}".lower()
+    for key, (name_ar, name_en, off_dom) in KNOWN_BRANDS.items():
+        aliases = (key, name_en.lower())
+        has_english_alias = any(
+            re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", haystack)
+            for alias in aliases if alias
+        )
+        has_domain = bool(re.search(rf"(?<![a-z0-9.-]){re.escape(off_dom.lower())}(?![a-z0-9.-])", haystack))
+        if has_english_alias or name_ar in haystack or has_domain:
+            return off_dom.lower()
+    return None
+
+
 def _sanitize_official_portal_url(parsed: dict, text_content: str, extracted_url: str) -> dict:
     if not isinstance(parsed, dict):
         return parsed
 
-    full_haystack = f"{text_content} {extracted_url}".lower()
-    matched_official_portal = None
-    for key, (name_ar, name_en, off_dom) in KNOWN_BRANDS.items():
-        if key in full_haystack or name_ar in text_content or name_en.lower() in full_haystack or off_dom in full_haystack:
-            matched_official_portal = f"https://www.{off_dom}" if not off_dom.startswith("http") else off_dom
-            break
+    matched_official_domain = _matched_known_brand_domain(text_content, extracted_url)
+    no_www_domains = {"iam.gov.sa", "tawakkalna.sdaia.gov.sa"}
+    matched_official_portal = (
+        f"https://{matched_official_domain}" if matched_official_domain in no_www_domains
+        else f"https://www.{matched_official_domain}" if matched_official_domain
+        else None
+    )
 
     if matched_official_portal:
         parsed["official_portal_url"] = matched_official_portal
+        parsed["official_domain"] = matched_official_domain
     else:
-        # Strictly force "غير متاح" when no known verified brand is in the message
+        # Never pass through an unverified model-suggested portal or domain.
         parsed["official_portal_url"] = "غير متاح"
+        parsed["official_domain"] = "غير متاح"
 
     return parsed
 
@@ -416,11 +439,10 @@ def _local_sms_analysis(text_content: str, extracted_url: str = "", language: st
         
         # Match against known verified brands; strictly return "غير متاح" if no known brand is found
         matched_portal = None
-        full_haystack = f"{text_content} {extracted_url}".lower()
-        for key, (_, _, off_dom) in KNOWN_BRANDS.items():
-            if key in full_haystack:
-                matched_portal = f"https://www.{off_dom}" if not off_dom.startswith("http") else off_dom
-                break
+        matched_domain = _matched_known_brand_domain(text_content, extracted_url)
+        if matched_domain:
+            no_www_domains = {"iam.gov.sa", "tawakkalna.sdaia.gov.sa"}
+            matched_portal = f"https://{matched_domain}" if matched_domain in no_www_domains else f"https://www.{matched_domain}"
 
         official_portal = matched_portal or "غير متاح"
         claim_verdict = "ادعاء مريب يحاكي أسلوب الاستدراج لحث المستخدم على التفاعل الفوري." if is_ar else "Suspicious lure attempt seeking immediate interaction."
@@ -453,12 +475,7 @@ def _local_sms_analysis(text_content: str, extracted_url: str = "", language: st
     else:
         credential_score = 2
 
-    matched_brand = False
-    full_haystack = f"{text_content} {extracted_url}".lower()
-    for key, (name_ar, name_en, off_dom) in KNOWN_BRANDS.items():
-        if key in full_haystack or name_ar in text_content or name_en.lower() in full_haystack or off_dom in full_haystack:
-            matched_brand = True
-            break
+    matched_brand = bool(_matched_known_brand_domain(text_content, extracted_url))
 
     if matched_brand:
         spoofing_score = 98 if (has_phishing_keywords or has_url) else 80
@@ -573,12 +590,13 @@ def _local_explanation(
     official_domain = None
 
     # 1. Brand Impersonation Check
-    for key, (name_ar, name_en, off_dom) in KNOWN_BRANDS.items():
-        if key in full_url_lower:
+    matched_domain = _matched_known_brand_domain("", url_str)
+    for _, (name_ar, name_en, off_dom) in KNOWN_BRANDS.items():
+        if matched_domain and off_dom.lower() == matched_domain:
             matched_brand_ar = name_ar
             matched_brand_en = name_en
             official_domain = off_dom
-            if registered_domain != off_dom and not host.endswith("." + off_dom):
+            if registered_domain != off_dom.lower() and not host.endswith("." + off_dom.lower()):
                 if is_ar:
                     reasons.append(f"انتحال صفة جهة رسمية: الرابط يحاكي اسم ({name_ar}) بينما النطاق الرسمي المعتمد هو ({off_dom}).")
                 else:

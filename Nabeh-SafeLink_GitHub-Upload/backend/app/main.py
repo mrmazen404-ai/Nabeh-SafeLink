@@ -8,8 +8,9 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from app.config import settings
 from app.auth.routes import router as auth_router
@@ -19,7 +20,10 @@ from app.dashboard.routes import router as dashboard_router
 from app.support.routes import router as support_router
 from app.legal.routes import router as legal_router
 from app.admin.routes import router as admin_router
+from app.admin.settings_routes import router as admin_settings_router
 from app.public.routes import router as public_router
+from app.legal.terms_consent import router as terms_consent_router
+from app.system_settings import SystemSettingsUnavailable, get_system_settings
 from app.observability import configure_logging, elapsed_ms, install_request_id_filter, log_event, reset_request_id, set_request_id
 
 configure_logging()
@@ -69,7 +73,9 @@ app.include_router(stats_router, prefix="/api/v1/statistics", tags=["Statistics"
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(support_router, prefix="/api/v1/support", tags=["Support"])
 app.include_router(legal_router, prefix="/api/v1/legal", tags=["Legal"])
+app.include_router(terms_consent_router)
 app.include_router(admin_router)
+app.include_router(admin_settings_router)
 app.include_router(public_router, prefix="/api/v1")
 
 
@@ -84,11 +90,37 @@ async def request_logging_middleware(request: Request, call_next):
         else str(uuid4())
     )
     request_token = set_request_id(request_id_value)
+    request.state.request_id = request_id_value
     started = time.perf_counter()
     log_event(logger, logging.INFO, "request_started", method=request.method, path=request.url.path)
     response = None
     try:
-        response = await call_next(request)
+        path = request.url.path
+        is_admin_path = path == "/api/v1/admin" or path.startswith("/api/v1/admin/")
+        is_runtime_config = path == "/api/v1/public/runtime-config"
+        is_health = path in {"/health", "/api/v1/health"}
+        if path.startswith("/api/v1/") and not (is_admin_path or is_runtime_config or is_health):
+            try:
+                maintenance_mode = await run_in_threadpool(
+                    lambda: get_system_settings()["system.maintenance_mode"]
+                )
+            except SystemSettingsUnavailable:
+                response = JSONResponse(
+                    status_code=503,
+                    content={"detail": "خدمة النظام غير متاحة مؤقتاً"},
+                    headers={"Cache-Control": "no-store"},
+                )
+            else:
+                if maintenance_mode:
+                    response = JSONResponse(
+                        status_code=503,
+                        content={"detail": "النظام في وضع الصيانة حالياً"},
+                        headers={"Cache-Control": "no-store"},
+                    )
+                else:
+                    response = await call_next(request)
+        else:
+            response = await call_next(request)
         log_event(
             logger,
             logging.INFO if response.status_code < 400 else logging.WARNING,

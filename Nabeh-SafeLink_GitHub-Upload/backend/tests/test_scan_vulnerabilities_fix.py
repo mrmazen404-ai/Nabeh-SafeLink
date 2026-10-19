@@ -79,3 +79,44 @@ def test_sanitize_official_portal_url_removes_generic_hallucinations():
 
 
 
+
+
+def test_url_explanation_cannot_return_generic_hallucinated_portal_or_domain():
+    from app.gemini.client import _validated_model_result
+
+    result = _validated_model_result(
+        {
+            "summary": "Test result",
+            "reasons": [],
+            "recommendation": "Be cautious",
+            "official_portal_url": "https://www.my.gov.sa/login",
+            "official_domain": "my.gov.sa",
+        },
+        model_name="test-model",
+        provider="GEMINI",
+        classification="SUSPICIOUS",
+        language="en",
+        input_value="https://example.net/verify",
+        evidence={},
+    )
+    assert result["official_portal_url"] == "غير متاح"
+    assert result["official_domain"] == "غير متاح"
+
+
+def test_sanitizer_recognizes_brand_tokens_but_not_substrings():
+    from app.gemini.client import _sanitize_official_portal_url
+
+    unrelated = _sanitize_official_portal_url(
+        {"official_portal_url": "https://www.stc.com.sa", "official_domain": "stc.com.sa"},
+        "Bestchoice update: your weekly summary is ready",
+        "",
+    )
+    assert unrelated["official_portal_url"] == "غير متاح"
+
+    branded = _sanitize_official_portal_url(
+        {"official_portal_url": "https://fake.example", "official_domain": "fake.example"},
+        "Your PayPal account needs verification",
+        "https://paypal-login.example/verify",
+    )
+    assert branded["official_portal_url"] == "https://www.paypal.com"
+    assert branded["official_domain"] == "paypal.com"

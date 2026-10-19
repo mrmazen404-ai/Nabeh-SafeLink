@@ -6,12 +6,13 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.db.supabase_client import supabase
 from app.security.guest_rate_limit import UpstashRateLimiter, client_identity
+from app.system_settings import get_runtime_config, setting_enabled_fail_closed
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +50,18 @@ def _count(table: str, filters: list[tuple[str, str]] | None = None) -> int:
     return int(result.count or 0)
 
 
+@router.get("/runtime-config")
+def public_runtime_config(response: Response):
+    """Expose only the explicit public allow-list; never return DB rows or secrets."""
+    response.headers["Cache-Control"] = "no-store, private"
+    return {"success": True, "data": get_runtime_config()}
+
+
 @router.post("/visit", status_code=202)
 def record_visit(event: VisitEvent, _: None = Depends(enforce_metrics_rate_limit)):
     """Record a unique visitor event; never claim success if storage failed."""
+    if not setting_enabled_fail_closed("features.public_metrics_enabled"):
+        return {"success": True, "disabled": True}
     now = datetime.now(timezone.utc).isoformat()
     visitor_hash = _visitor_hash(event.visitor_id)
     supabase.table("site_visitors").upsert(
@@ -64,6 +74,8 @@ def record_visit(event: VisitEvent, _: None = Depends(enforce_metrics_rate_limit
 @router.get("/overview")
 def public_overview(_: None = Depends(enforce_metrics_rate_limit)):
     """Return platform metrics or a clear 503; never substitute fake zeroes."""
+    if not setting_enabled_fail_closed("features.public_metrics_enabled"):
+        return {"success": True, "data": {"enabled": False}}
     try:
         total_visitors = _count("site_visitors")
         recent = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
@@ -85,6 +97,7 @@ def public_overview(_: None = Depends(enforce_metrics_rate_limit)):
                 "safe_scans": safe,
                 "suspicious_scans": suspicious,
                 "dangerous_scans": dangerous,
+                "enabled": True,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             },
         }

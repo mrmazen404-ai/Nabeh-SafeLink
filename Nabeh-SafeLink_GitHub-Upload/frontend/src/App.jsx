@@ -12,6 +12,10 @@ import {
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { RuntimeConfigProvider, useRuntimeConfig } from './context/RuntimeConfigContext';
+import { useLanguage } from './context/LanguageContext';
+import TermsConsentGate from './components/TermsConsentGate';
+import MaintenancePage from './components/MaintenancePage';
 
 import Splash from './pages/auth/Splash';
 import Onboarding from './pages/auth/Onboarding';
@@ -79,6 +83,7 @@ const DataPrivacy = lazyWithRetry(() => import('./pages/DataPrivacy'));
 import ErrorPage from './components/ErrorPage';
 import BottomNav from './components/BottomNav';
 import './styles/theme.css';
+import './components/system-gates.css';
 const TAB_PATHS = {
   home: '/dashboard',
   scan: '/scan',
@@ -104,13 +109,14 @@ function LoadingRoute() {
 
 function ProtectedRoute() {
   const { isGuest, loading } = useAuth();
+  const { config } = useRuntimeConfig();
   const location = useLocation();
   if (loading) return <LoadingRoute />;
   if (isGuest) {
     const next = `${location.pathname}${location.search || ''}`;
     return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace state={{ from: location }} />;
   }
-  return <Outlet />;
+  return config.require_latest_terms ? <TermsConsentGate><Outlet /></TermsConsentGate> : <Outlet />;
 }
 
 function GuestRoute() {
@@ -122,6 +128,38 @@ function GuestRoute() {
 
 function PublicRoute() {
   return <Outlet />;
+}
+
+function RegistrationDisabledPage() {
+  const { lang, dir } = useLanguage();
+  const navigate = useNavigate();
+  const isArabic = lang === 'ar';
+  return <main className="feature-disabled-page" dir={dir}>
+    <section className="feature-disabled-card" role="status">
+      <h1>{isArabic ? 'التسجيل متوقف حالياً' : 'Registration is currently disabled'}</h1>
+      <p>{isArabic ? 'أوقف مسؤول النظام إنشاء حسابات جديدة مؤقتاً. يمكنك تسجيل الدخول إلى حسابك الحالي.' : 'The system administrator has temporarily stopped new account creation. Existing users can still sign in.'}</p>
+      <button type="button" className="btn btn-primary" onClick={() => navigate('/login')}>{isArabic ? 'الانتقال لتسجيل الدخول' : 'Go to sign in'}</button>
+    </section>
+  </main>;
+}
+
+function GuestScanRoute() {
+  const { isGuest, loading } = useAuth();
+  const { config } = useRuntimeConfig();
+  const { lang, dir } = useLanguage();
+  const navigate = useNavigate();
+  if (loading) return <LoadingRoute />;
+  if (isGuest && !config.guest_scanning_enabled) {
+    const isArabic = lang === 'ar';
+    return <main className="feature-disabled-page" dir={dir}>
+      <section className="feature-disabled-card" role="status">
+        <h1>{isArabic ? 'الفحص كضيف متوقف' : 'Guest scanning is disabled'}</h1>
+        <p>{isArabic ? 'أوقف مسؤول النظام الفحص دون حساب. سجّل الدخول لاستخدام الفحص.' : 'The system administrator has disabled unauthenticated scanning. Sign in to continue.'}</p>
+        <button type="button" className="btn btn-primary" onClick={() => navigate('/login')}>{isArabic ? 'تسجيل الدخول' : 'Sign in'}</button>
+      </section>
+    </main>;
+  }
+  return <RoutedPage component={Scanner} />;
 }
 
 function NavigationLayout({ initialScanUrl, onQuickScan, onClearInitial, onNavigateAuth }) {
@@ -229,6 +267,7 @@ function SettingsRedirect() {
 }
 
 function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
+  const { config } = useRuntimeConfig();
   const navigate = useNavigate();
   const location = useLocation();
   const onNavigateAuth = AuthNavigation();
@@ -252,7 +291,7 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
 
       <Route element={<PublicRoute />}>
         <Route element={<NavigationLayout initialScanUrl={initialScanUrl} onQuickScan={onQuickScan} onClearInitial={onClearInitial} onNavigateAuth={onNavigateAuth} />}>
-          <Route path="/scan" element={<RoutedPage component={Scanner} />} />
+          <Route path="/scan" element={<TermsConsentGate><GuestScanRoute /></TermsConsentGate>} />
           <Route path="/faq" element={<RoutedPage component={Faq} />} />
           <Route path="/support" element={<RoutedPage component={Faq} />} />
           <Route path="/guide" element={<RoutedPage component={UserGuide} />} />
@@ -269,7 +308,7 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
 
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<Login onNavigate={onNavigateAuth} />} />
-        <Route path="/register" element={<Register onNavigate={onNavigateAuth} />} />
+        <Route path="/register" element={config.registration_enabled ? <Register onNavigate={onNavigateAuth} /> : <RegistrationDisabledPage />} />
         <Route path="/forgot-password" element={<ForgotPassword onNavigate={onNavigateAuth} />} />
         <Route path="/reset-password" element={<ResetPassword onNavigate={onNavigateAuth} />} />
         <Route path="/verify-otp" element={<VerifyOtpRoute onNavigateAuth={onNavigateAuth} />} />
@@ -299,24 +338,38 @@ function AppRoutes({ initialScanUrl, onQuickScan, onClearInitial }) {
   );
 }
 
-export default function App() {
+function RuntimeApplication() {
+  const { config, loading, refresh } = useRuntimeConfig();
   const [initialScanUrl, setInitialScanUrl] = useState('');
 
+  if (loading) return <main className="runtime-config-loading" role="status">{config.default_language === 'ar' ? 'جارٍ تحميل إعدادات النظام...' : 'Loading system settings…'}</main>;
+  if (config.maintenance_mode) {
+    return <ThemeProvider><LanguageProvider><MaintenancePage onCheckAgain={refresh} /></LanguageProvider></ThemeProvider>;
+  }
+
   return (
-    <AppErrorBoundary>
-    <ThemeProvider>
-      <LanguageProvider>
-        <BrowserRouter>
-          <AuthProvider>
+    <AuthProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <BrowserRouter>
             <AppRoutes
               initialScanUrl={initialScanUrl}
               onQuickScan={(value) => setInitialScanUrl(value || '')}
               onClearInitial={() => setInitialScanUrl('')}
             />
-          </AuthProvider>
-        </BrowserRouter>
-      </LanguageProvider>
-    </ThemeProvider>
+          </BrowserRouter>
+        </LanguageProvider>
+      </ThemeProvider>
+    </AuthProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <AppErrorBoundary>
+      <RuntimeConfigProvider>
+        <RuntimeApplication />
+      </RuntimeConfigProvider>
     </AppErrorBoundary>
   );
 }

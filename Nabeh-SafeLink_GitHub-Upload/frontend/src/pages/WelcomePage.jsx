@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useRuntimeConfig } from '../context/RuntimeConfigContext';
 import Header from '../components/Header';
 import {
   ArrowLeftIcon,
@@ -87,14 +88,16 @@ export default function WelcomePage() {
   const navigate = useNavigate();
   const { isGuest } = useAuth();
   const { lang, dir } = useLanguage();
+  const { config } = useRuntimeConfig();
   const text = content[lang] || content.ar;
   const [platformStats, setPlatformStats] = useState(null);
   const [statsFailed, setStatsFailed] = useState(false);
   useEffect(() => {
+    if (!config.public_metrics_enabled) return undefined;
     let visitorId = localStorage.getItem('nabeh_visitor_id');
     if (!visitorId) { visitorId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64); localStorage.setItem('nabeh_visitor_id', visitorId); }
     Promise.allSettled([api.post('/public/visit', { visitor_id: visitorId, page: 'welcome' }), api.get('/public/overview')]).then(([, overview]) => { if (overview.status === 'fulfilled') setPlatformStats(overview.value.data?.data || null); else setStatsFailed(true); });
-  }, []);
+  }, [config.public_metrics_enabled]);
   const ForwardIcon = dir === 'rtl' ? ArrowLeftIcon : ArrowRightIcon;
   const setActiveTab = (tab) => {
     const paths = {
@@ -154,10 +157,10 @@ export default function WelcomePage() {
         <p>{text.missionCopy}</p>
       </section>
 
-      <section className="welcome-platform-stats" aria-label={text.platformStats}>
+      {config.public_metrics_enabled && <section className="welcome-platform-stats" aria-label={text.platformStats}>
         <div className="welcome-platform-stats-heading"><span className="welcome-section-label">{text.platformStats}</span><small>{platformStats?.generated_at ? new Date(platformStats.generated_at).toLocaleString(lang === 'en' ? 'en-US' : 'ar-SA') : '—'}</small></div>
         {statsFailed ? <p className="welcome-stats-error">{text.statsError}</p> : <div className="welcome-stats-grid">{[[text.visitors, platformStats?.visitors], [text.users, platformStats?.registered_users], [text.scans, platformStats?.scans], [text.safeScans, platformStats?.safe_scans], [text.suspiciousScans, platformStats?.suspicious_scans], [text.dangerousScans, platformStats?.dangerous_scans]].map(([label, value]) => <article className="welcome-stat-card" key={label}><span>{label}</span><strong>{value ?? '—'}</strong></article>)}</div>}
-      </section>
+      </section>}
 
       <section className="welcome-features" aria-label={text.missionLabel}>
         {text.features.map(([title, description, Icon]) => (

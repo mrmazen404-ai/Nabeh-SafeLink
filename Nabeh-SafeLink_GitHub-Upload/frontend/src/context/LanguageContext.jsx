@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import { useRuntimeConfig } from './RuntimeConfigContext';
+import api from '../services/api';
 
 const LanguageContext = createContext();
 
@@ -1089,19 +1092,39 @@ export const translations = {
 };
 
 export function LanguageProvider({ children }) {
+  const { config } = useRuntimeConfig();
+  const auth = useAuth();
+  const user = auth?.user;
   const [lang, setLang] = useState(() => {
+    if (!config.allow_language_override) return config.default_language;
+    if (user?.preferred_language === 'ar' || user?.preferred_language === 'en') return user.preferred_language;
     try {
       const saved = localStorage.getItem('nabeh_lang');
       if (saved === 'ar' || saved === 'en') return saved;
-      return 'ar'; // Default language Arabic
+      return config.default_language;
     } catch {
-      return 'ar';
+      return config.default_language;
     }
   });
 
   useEffect(() => {
+    if (!config.allow_language_override) {
+      setLang(config.default_language);
+    } else if (user?.preferred_language === 'ar' || user?.preferred_language === 'en') {
+      setLang(user.preferred_language);
+    } else {
+      try {
+        const saved = localStorage.getItem('nabeh_lang');
+        setLang(saved === 'ar' || saved === 'en' ? saved : config.default_language);
+      } catch {
+        setLang(config.default_language);
+      }
+    }
+  }, [config.allow_language_override, config.default_language, user?.user_id, user?.preferred_language]);
+
+  useEffect(() => {
     try {
-      localStorage.setItem('nabeh_lang', lang);
+      if (config.allow_language_override) localStorage.setItem('nabeh_lang', lang);
     } catch (e) {
       console.error('Could not save language preference', e);
     }
@@ -1115,15 +1138,19 @@ export function LanguageProvider({ children }) {
     } else {
       document.body.style.fontFamily = "'Poppins', 'Inter', -apple-system, sans-serif";
     }
-  }, [lang]);
+  }, [lang, config.allow_language_override]);
 
   const toggleLanguage = () => {
+    if (!config.allow_language_override) return;
     setLang((prev) => (prev === 'ar' ? 'en' : 'ar'));
   };
 
   const setLanguage = (newLang) => {
-    if (newLang === 'ar' || newLang === 'en') {
+    if (config.allow_language_override && (newLang === 'ar' || newLang === 'en')) {
       setLang(newLang);
+      if (auth?.isGuest === false && user && user.preferred_language !== newLang) {
+        api.patch('/dashboard/profile', { preferred_language: newLang }).catch(() => {});
+      }
     }
   };
 
@@ -1161,7 +1188,7 @@ export function LanguageProvider({ children }) {
   };
 
   return (
-    <LanguageContext.Provider value={{ lang, dir: lang === 'ar' ? 'rtl' : 'ltr', toggleLanguage, setLanguage, t }}>
+    <LanguageContext.Provider value={{ lang, dir: lang === 'ar' ? 'rtl' : 'ltr', toggleLanguage, setLanguage, canChangeLanguage: config.allow_language_override, t }}>
       {children}
     </LanguageContext.Provider>
   );
