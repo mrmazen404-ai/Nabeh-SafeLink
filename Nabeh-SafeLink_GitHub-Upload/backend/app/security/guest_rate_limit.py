@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import logging
 import os
 import time
@@ -28,6 +29,7 @@ class RateLimitDecision:
     limit: int
     remaining: int
     retry_after: int
+    unavailable: bool = False
 
 
 class UpstashRateLimiter:
@@ -50,6 +52,7 @@ return {current, ttl}
         window_seconds: int = 60,
         timeout_seconds: float = 2.5,
         fail_closed: bool = False,
+        namespace: str = "nabeh:guest:scan",
     ) -> None:
         self.url = (url or os.getenv("UPSTASH_REDIS_REST_URL", "")).rstrip("/")
         self.token = token or os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
@@ -57,6 +60,7 @@ return {current, ttl}
         self.window_seconds = max(1, int(window_seconds))
         self.timeout_seconds = max(0.5, float(timeout_seconds))
         self.fail_closed = fail_closed
+        self.namespace = namespace
 
     @property
     def configured(self) -> bool:
@@ -66,11 +70,19 @@ return {current, ttl}
         started = time.perf_counter()
         identity_id = resource_id(identity)
         if not self.configured:
-            log_event(logger, logging.WARNING, "rate_limit_unconfigured_fail_open", identity_id=identity_id)
+            log_event(
+                logger,
+                logging.ERROR if self.fail_closed else logging.WARNING,
+                "rate_limit_unconfigured",
+                identity_id=identity_id,
+                fail_closed=self.fail_closed,
+            )
+            if self.fail_closed:
+                return RateLimitDecision(False, self.limit, 0, self.window_seconds, unavailable=True)
             return RateLimitDecision(True, self.limit, self.limit, 0)
 
         window_id = int(time.time()) // self.window_seconds
-        key = f"nabeh:guest:scan:{self._hash_identity(identity)}:{window_id}"
+        key = f"{self.namespace}:{self._hash_identity(identity)}:{window_id}"
         payload = ["EVAL", self.LUA_SCRIPT, "1", key, str(self.window_seconds)]
 
         try:
@@ -88,7 +100,7 @@ return {current, ttl}
         except Exception as error:
             log_event(logger, logging.ERROR, "rate_limit_provider_failed", identity_id=identity_id, error_type=safe_error(error), duration_ms=elapsed_ms(started))
             if self.fail_closed:
-                return RateLimitDecision(False, self.limit, 0, self.window_seconds)
+                return RateLimitDecision(False, self.limit, 0, self.window_seconds, unavailable=True)
             # Availability of Redis must not take down local development.
             return RateLimitDecision(True, self.limit, self.limit, 0)
 
@@ -115,11 +127,25 @@ def client_identity(request: Request) -> str:
     X-Forwarded-For is used only when explicitly enabled because clients can
     forge it outside a trusted reverse proxy.
     """
-    if os.getenv("NABEH_TRUST_PROXY_HEADERS", "false").lower() in {"1", "true", "yes"}:
-        forwarded = request.headers.get("x-forwarded-for", "")
-        if forwarded:
-            return forwarded.split(",", 1)[0].strip() or "unknown"
-    return request.client.host if request.client else "unknown"
+    trust_headers = os.getenv("NABEH_TRUST_PROXY_HEADERS", "false").lower() in {"1", "true", "yes"}
+    trusted_proxy_cidrs = [
+        value.strip() for value in os.getenv("NABEH_TRUSTED_PROXY_CIDRS", "").split(",") if value.strip()
+    ]
+    remote = request.client.host if request.client else "unknown"
+    if trust_headers and trusted_proxy_cidrs and remote != "unknown":
+        try:
+            remote_ip = ipaddress.ip_address(remote)
+            trusted = any(remote_ip in ipaddress.ip_network(cidr, strict=False) for cidr in trusted_proxy_cidrs)
+        except ValueError:
+            trusted = False
+        if trusted:
+            forwarded = request.headers.get("x-forwarded-for", "")
+            candidate = forwarded.split(",", 1)[0].strip()
+            try:
+                return str(ipaddress.ip_address(candidate))
+            except ValueError:
+                pass
+    return remote
 
 
 _guest_limiter = UpstashRateLimiter(
@@ -134,8 +160,8 @@ async def enforce_guest_rate_limit(request: Request) -> None:
     if not decision.allowed:
         log_event(logger, logging.WARNING, "guest_rate_limit_blocked", remaining=decision.remaining, retry_after=decision.retry_after)
         raise HTTPException(
-            status_code=429,
-            detail="عدد محاولات فحص الضيف مرتفع مؤقتاً. حاول لاحقاً.",
+            status_code=503 if decision.unavailable else 429,
+            detail=("خدمة تحديد معدل الطلبات غير متاحة مؤقتاً." if decision.unavailable else "عدد محاولات فحص الضيف مرتفع مؤقتاً. حاول لاحقاً."),
             headers={
                 "Retry-After": str(decision.retry_after or 60),
                 "X-RateLimit-Limit": str(decision.limit),

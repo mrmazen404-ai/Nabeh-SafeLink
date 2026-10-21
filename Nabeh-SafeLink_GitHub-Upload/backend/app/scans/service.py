@@ -97,6 +97,37 @@ class ScanService:
         return combined
 
     @staticmethod
+    def _enforce_text_safety_floor(combined: dict, text_rules: dict, ai_result: dict) -> dict:
+        """AI may increase a risk verdict but cannot downgrade deterministic evidence."""
+        rank = {"SAFE": 0, "UNKNOWN": 1, "SUSPICIOUS": 2, "DANGEROUS": 3}
+        evidence = [combined or {}, text_rules or {}]
+        baseline = max(
+            (item for item in evidence if str(item.get("classification", "UNKNOWN")).upper() in rank),
+            key=lambda item: rank[str(item.get("classification", "UNKNOWN")).upper()],
+            default={"classification": "UNKNOWN", "confidence": None},
+        )
+        ai = dict(ai_result or {})
+        ai_class = str(ai.get("classification", "UNKNOWN")).upper()
+        base_class = str(baseline.get("classification", "UNKNOWN")).upper()
+        if ai_class not in rank:
+            ai_class = "UNKNOWN"
+        if rank[ai_class] < rank[base_class]:
+            ai["classification"] = base_class
+            ai["confidence"] = baseline.get("confidence")
+        else:
+            ai["classification"] = ai_class
+            try:
+                ai_confidence = float(ai.get("confidence"))
+            except (TypeError, ValueError):
+                ai_confidence = 0.0
+            try:
+                evidence_confidence = float(baseline.get("confidence"))
+            except (TypeError, ValueError):
+                evidence_confidence = 0.0
+            ai["confidence"] = max(0.0, min(1.0, max(ai_confidence, evidence_confidence)))
+        return ai
+
+    @staticmethod
     def combine_scan_results(vt_result: dict, ml_result: dict) -> dict:
         """Combine 3-Stage Scan Results (Stage 1: ML, Stage 2: VirusTotal) into an accurate verdict.
 
@@ -294,6 +325,7 @@ class ScanService:
     @classmethod
     async def process_url_scan(cls, target_url: str, language: str = "ar") -> dict:
         """Standalone 3-Stage URL Link Scanner (ML -> VirusTotal -> Gemini Research)."""
+        deadline = asyncio.get_running_loop().time() + settings.SCAN_TOTAL_TIMEOUT_SECONDS
         try:
             ml_result = predict_url(target_url)
         except Exception:
@@ -301,7 +333,11 @@ class ScanService:
             ml_result = {"classification": "UNKNOWN", "confidence": None, "source": "ML_ERROR"}
 
         try:
-            vt_result = await check_url_virustotal(target_url)
+            remaining = max(0.0, deadline - asyncio.get_running_loop().time())
+            vt_result = await asyncio.wait_for(check_url_virustotal(target_url), timeout=remaining)
+        except asyncio.TimeoutError:
+            logger.warning("url_scan_total_deadline_virustotal")
+            vt_result = {"status": "UNKNOWN", "error": "SCAN_DEADLINE_EXCEEDED"}
         except Exception:
             logger.exception("url_virustotal_failed")
             vt_result = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
@@ -309,7 +345,14 @@ class ScanService:
         combined = cls.combine_scan_results(vt_result, ml_result)
         combined["evidence"] = {"ml": ml_result, "virustotal": vt_result, "input_type": "URL"}
 
-        ai_enabled = await asyncio.to_thread(setting_enabled_fail_closed, "features.ai_explanations_enabled")
+        remaining = max(0.0, deadline - asyncio.get_running_loop().time())
+        try:
+            ai_enabled = await asyncio.wait_for(
+                asyncio.to_thread(setting_enabled_fail_closed, "features.ai_explanations_enabled"), timeout=remaining
+            )
+        except asyncio.TimeoutError:
+            ai_enabled = False
+            logger.warning("scan_total_deadline_settings")
         if not ai_enabled:
             explanation = cls._local_explanation(combined["classification"], language)
             explanation["provider"] = "LOCAL_FEATURE_DISABLED"
@@ -322,7 +365,7 @@ class ScanService:
                         evidence=combined.get("evidence", {}),
                         language=language,
                     ),
-                    timeout=settings.SCAN_AI_TIMEOUT_SECONDS,
+                    timeout=max(0.0, min(settings.SCAN_AI_TIMEOUT_SECONDS, deadline - asyncio.get_running_loop().time())),
                 )
             except asyncio.TimeoutError:
                 logger.warning("url_gemini_timeout")
@@ -375,6 +418,7 @@ class ScanService:
     @classmethod
     async def process_text_scan(cls, text_content: str, language: str = "ar") -> dict:
         """100% AI-Driven SMS / Text Message Smishing Scanner (Gemini AI API + Link Audit Pipeline)."""
+        deadline = asyncio.get_running_loop().time() + settings.SCAN_TOTAL_TIMEOUT_SECONDS
         extracted_url = cls.extract_url_from_text(text_content)
         vt_result, ml_result = {}, {}
 
@@ -386,7 +430,11 @@ class ScanService:
                 ml_result = {"classification": "UNKNOWN", "confidence": None, "source": "ML_ERROR"}
 
             try:
-                vt_result = await check_url_virustotal(extracted_url)
+                remaining = max(0.0, deadline - asyncio.get_running_loop().time())
+                vt_result = await asyncio.wait_for(check_url_virustotal(extracted_url), timeout=remaining)
+            except asyncio.TimeoutError:
+                logger.warning("sms_scan_total_deadline_virustotal")
+                vt_result = {"status": "UNKNOWN", "error": "SCAN_DEADLINE_EXCEEDED"}
             except Exception:
                 logger.exception("sms_virustotal_failed")
                 vt_result = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
@@ -410,7 +458,14 @@ class ScanService:
         }
 
         # Gemini is optional and can be disabled centrally without disabling local analysis.
-        ai_enabled = await asyncio.to_thread(setting_enabled_fail_closed, "features.ai_explanations_enabled")
+        remaining = max(0.0, deadline - asyncio.get_running_loop().time())
+        try:
+            ai_enabled = await asyncio.wait_for(
+                asyncio.to_thread(setting_enabled_fail_closed, "features.ai_explanations_enabled"), timeout=remaining
+            )
+        except asyncio.TimeoutError:
+            ai_enabled = False
+            logger.warning("scan_total_deadline_settings")
         if not ai_enabled:
             local_text = cls.analyze_text_phishing(text_content, bool(extracted_url))
             fallback_classification = combined["classification"] if extracted_url else local_text["classification"]
@@ -430,7 +485,7 @@ class ScanService:
                         evidence=evidence,
                         language=language,
                     ),
-                    timeout=settings.SCAN_AI_TIMEOUT_SECONDS,
+                    timeout=max(0.0, min(settings.SCAN_AI_TIMEOUT_SECONDS, deadline - asyncio.get_running_loop().time())),
                 )
             except asyncio.TimeoutError:
                 logger.warning("sms_gemini_timeout")
@@ -454,9 +509,21 @@ class ScanService:
                     "provider": "LOCAL_ERROR_FALLBACK",
                 }
 
+        local_text = cls.analyze_text_phishing(text_content, bool(extracted_url))
+        ai_analysis = cls._enforce_text_safety_floor(combined if extracted_url else local_text, local_text, ai_analysis)
         classification = ai_analysis.get("classification", combined.get("classification", "UNKNOWN"))
-        confidence = float(ai_analysis.get("confidence") or combined.get("confidence") or 0.85)
-        fraud_prob = float(ai_analysis.get("fraud_probability") or (0.95 if classification == "DANGEROUS" else (0.60 if classification == "SUSPICIOUS" else 0.01)))
+        try:
+            confidence = max(0.0, min(1.0, float(ai_analysis.get("confidence") if ai_analysis.get("confidence") is not None else combined.get("confidence") or 0.0)))
+        except (TypeError, ValueError):
+            confidence = float(combined.get("confidence") or local_text.get("confidence") or 0.0)
+        try:
+            fraud_prob = max(0.0, min(1.0, float(ai_analysis.get("fraud_probability") if ai_analysis.get("fraud_probability") is not None else 0.0)))
+        except (TypeError, ValueError):
+            fraud_prob = 0.0
+        if classification == "DANGEROUS":
+            fraud_prob = max(0.95, fraud_prob)
+        elif classification == "SUSPICIOUS":
+            fraud_prob = max(0.55, fraud_prob)
 
         explanation = {
             "summary": ai_analysis.get("summary", ""),

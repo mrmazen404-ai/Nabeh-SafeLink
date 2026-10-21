@@ -38,6 +38,7 @@ create table if not exists public.custom_users (
   preferred_language varchar(5) not null default 'ar'
     check (preferred_language in ('ar', 'en')),
   last_login_at timestamptz,
+  auth_token_version integer not null default 0 check (auth_token_version >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -50,6 +51,7 @@ alter table public.custom_users
   add column if not exists email_verified boolean not null default false,
   add column if not exists preferred_language varchar(5) not null default 'ar',
   add column if not exists last_login_at timestamptz,
+  add column if not exists auth_token_version integer not null default 0,
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();
 
@@ -437,7 +439,7 @@ create table if not exists public.privacy_consents (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.custom_users(id) on delete restrict,
   consent_type text not null
-    check (consent_type in ('PRIVACY_POLICY', 'DATA_RETENTION', 'MODEL_IMPROVEMENT')),
+    check (consent_type in ('PRIVACY_POLICY', 'DATA_RETENTION', 'MODEL_IMPROVEMENT', 'TERMS_OF_USE')),
   version text not null,
   granted boolean not null,
   granted_at timestamptz not null default now(),

@@ -60,3 +60,5 @@ def test_rate_limiters_fail_closed_by_default():
     assert _login_limiter.fail_closed is True
     assert _resend_limiter.fail_closed is True
     assert _resend_cooldown_limiter.fail_closed is True
+    assert _guest_limiter.namespace != _login_limiter.namespace
+    assert _guest_limiter.namespace != _resend_limiter.namespace

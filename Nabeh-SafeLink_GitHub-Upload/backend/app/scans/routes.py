@@ -34,7 +34,9 @@ async def get_optional_user_id(authorization: Optional[str] = None) -> Optional[
     if token is None:
         return None
     try:
-        return str(get_authenticated_user(token)["id"])
+        user = get_authenticated_user(token)
+        require_latest_terms(user)
+        return str(user["id"])
     except AuthSecurityError:
         raise HTTPException(status_code=401, detail="جلسة غير صالحة") from None
 
@@ -159,12 +161,15 @@ async def delete_scan(
     """User deletion is privacy-preserving soft deletion, not a destructive DB delete."""
     user_id = await get_required_user_id(authorization)
     try:
-        owned = supabase.table("scans").select("id").eq("id", scan_id).eq("user_id", user_id).is_("user_deleted_at", "null").limit(1).execute()
-        if not owned.data:
-            raise HTTPException(status_code=404, detail="الفحص غير موجود أو لا تملك صلاحية الوصول إليه")
         now = datetime.now(timezone.utc).isoformat()
-        result = supabase.table("scans").update({"user_deleted_at": now, "user_hidden_at": now, "input_value_masked": None}).eq("id", scan_id).eq("user_id", user_id).execute()
-        return {"success": True, "message": "تم حذف بيانات الفحص من سجلك", "data": (result.data or [{"id": scan_id, "user_deleted_at": now}])[0]}
+        deleted = supabase.rpc("nabeh_delete_user_scan", {
+            "p_user_id": user_id,
+            "p_scan_id": scan_id,
+            "p_deleted_at": now,
+        }).execute()
+        if deleted.data is not True:
+            raise HTTPException(status_code=404, detail="الفحص غير موجود أو لا تملك صلاحية الوصول إليه")
+        return {"success": True, "message": "تم حذف بيانات الفحص من سجلك", "data": {"id": scan_id, "user_deleted_at": now}}
     except HTTPException:
         raise
     except Exception:
@@ -219,3 +224,4 @@ async def get_scan_details(
         raise
     except Exception:
         raise HTTPException(status_code=503, detail="تعذر تحميل تفاصيل الفحص") from None
+from app.legal.terms_consent import require_latest_terms

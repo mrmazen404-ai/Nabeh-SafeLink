@@ -136,7 +136,9 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     setStatus('logging_out');
     try {
-      // Tokens are stateless and the API intentionally has no /auth/logout endpoint
+      if (getAccessToken()) await api.post('/auth/logout');
+    } catch {
+      // Always clear local credentials even if the server is temporarily unavailable.
     } finally {
       clearLocalSession(setUser, setToken, setStatus);
     }

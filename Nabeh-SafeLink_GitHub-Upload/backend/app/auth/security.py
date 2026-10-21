@@ -71,6 +71,7 @@ def issue_access_token(user: dict[str, Any], purpose: str = "access") -> str:
         "sub": str(user["id"]),
         "email": user["email"],
         "purpose": purpose,
+        "session_version": int(user.get("auth_token_version", 0) or 0),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=settings.AUTH_ACCESS_TOKEN_MINUTES)).timestamp()),
     }
@@ -92,14 +93,14 @@ def decode_token(token: str, required_purpose: str = "access") -> dict[str, Any]
 
 def get_user_by_id(user_id: str) -> Optional[dict[str, Any]]:
     result = supabase.table("custom_users").select(
-        "id,email,display_name,password_hash,email_verified,preferred_language,role,status,created_at,last_login_at"
+        "id,email,display_name,password_hash,email_verified,preferred_language,role,status,auth_token_version,created_at,last_login_at"
     ).eq("id", user_id).limit(1).execute()
     return result.data[0] if result.data else None
 
 
 def get_user_by_email(email: str) -> Optional[dict[str, Any]]:
     result = supabase.table("custom_users").select(
-        "id,email,display_name,password_hash,email_verified,preferred_language,role,status,created_at,last_login_at"
+        "id,email,display_name,password_hash,email_verified,preferred_language,role,status,auth_token_version,created_at,last_login_at"
     ).ilike("email", normalize_email(email)).limit(1).execute()
     return result.data[0] if result.data else None
 
@@ -109,6 +110,8 @@ def get_authenticated_user(token: str) -> dict[str, Any]:
     user = get_user_by_id(str(claims["sub"]))
     if not user or not user.get("email_verified") or user.get("status", "ACTIVE") != "ACTIVE":
         raise AuthSecurityError("user is not authenticated")
+    if int(claims.get("session_version", 0)) != int(user.get("auth_token_version", 0) or 0):
+        raise AuthSecurityError("session has been revoked")
     return user
 
 
@@ -117,4 +120,6 @@ def get_reset_user(token: str) -> dict[str, Any]:
     user = get_user_by_id(str(claims["sub"]))
     if not user or not user.get("email_verified") or user.get("status", "ACTIVE") != "ACTIVE":
         raise AuthSecurityError("invalid reset token")
+    if int(claims.get("session_version", 0)) != int(user.get("auth_token_version", 0) or 0):
+        raise AuthSecurityError("reset session has been revoked")
     return user

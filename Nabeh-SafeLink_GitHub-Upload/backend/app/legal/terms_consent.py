@@ -61,6 +61,36 @@ def _consent_language(user: dict) -> str:
     return preferred if preferred in {"ar", "en"} else settings.get("ui.default_language", "ar")
 
 
+def require_latest_terms(user: dict) -> None:
+    """Enforce current terms on authenticated APIs, not only in the React route gate."""
+    try:
+        if not setting_enabled("legal.require_latest_terms"):
+            return
+        language = _consent_language(user)
+        terms = _latest_terms(language)
+        consent = (
+            supabase.table("privacy_consents")
+            .select("id")
+            .eq("user_id", str(user["id"]))
+            .eq("consent_type", "TERMS_OF_USE")
+            .eq("version", str(terms["version"]))
+            .eq("granted", True)
+            .limit(1)
+            .execute()
+        )
+    except HTTPException:
+        raise
+    except SystemSettingsUnavailable:
+        raise HTTPException(status_code=503, detail="تعذر التحقق من حالة الشروط") from None
+    except Exception:
+        raise HTTPException(status_code=503, detail="تعذر التحقق من أحدث موافقة للشروط") from None
+    if not consent.data:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "TERMS_CONSENT_REQUIRED", "version": str(terms["version"])},
+        )
+
+
 @router.get("/terms-status")
 def terms_status(user: dict = Depends(current_user)):
     try:

@@ -81,6 +81,38 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _increment_otp_attempts(otp: dict) -> None:
+    attempts = int(otp.get("attempts", 0))
+    result = (
+        supabase.table("custom_auth_otps")
+        .update({"attempts": attempts + 1})
+        .eq("id", otp["id"])
+        .eq("attempts", attempts)
+        .is_("consumed_at", "null")
+        .select("id")
+        .execute()
+    )
+    if not result.data:
+        raise ValueError("otp state changed")
+
+
+def _consume_otp(otp: dict) -> None:
+    now = _now().isoformat()
+    result = (
+        supabase.table("custom_auth_otps")
+        .update({"consumed_at": now})
+        .eq("id", otp["id"])
+        .eq("code_hash", otp["code_hash"])
+        .eq("attempts", int(otp.get("attempts", 0)))
+        .is_("consumed_at", "null")
+        .gt("expires_at", now)
+        .select("id")
+        .execute()
+    )
+    if not result.data:
+        raise ValueError("otp unavailable or already consumed")
+
+
 SYSTEM_PENDING_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 
@@ -179,8 +211,43 @@ def _generic_auth_message() -> str:
     return "إذا كان البريد صالحاً، فستصلك رسالة التحقق عبر البريد الإلكتروني"
 
 
+_AUTH_RATE_LIMIT_FAIL_CLOSED = os.getenv(
+    "NABEH_AUTH_RATE_LIMIT_FAIL_CLOSED",
+    os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true"),
+).lower() in {"1", "true", "yes"}
+
+
+def _auth_limiters(limit: int, window_seconds: int, purpose: str) -> tuple[UpstashRateLimiter, UpstashRateLimiter]:
+    return (
+        UpstashRateLimiter(limit=limit * 4, window_seconds=window_seconds, fail_closed=_AUTH_RATE_LIMIT_FAIL_CLOSED, namespace=f"nabeh:auth:{purpose}:ip"),
+        UpstashRateLimiter(limit=limit, window_seconds=window_seconds, fail_closed=_AUTH_RATE_LIMIT_FAIL_CLOSED, namespace=f"nabeh:auth:{purpose}:email"),
+    )
+
+
+async def _enforce_auth_limits(
+    request: Request,
+    email: str,
+    limiters: tuple[UpstashRateLimiter, UpstashRateLimiter],
+) -> None:
+    ip_identity = client_identity(request)
+    email_identity = normalize_email(email)
+    for limiter, identity in zip(limiters, (ip_identity, email_identity)):
+        decision = await limiter.check(identity)
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=503 if decision.unavailable else 429,
+                detail=("تعذر معالجة الطلب مؤقتاً. حاول لاحقاً." if decision.unavailable else "تم تجاوز عدد الطلبات. حاول لاحقاً."),
+                headers={"Retry-After": str(decision.retry_after or 60), "Cache-Control": "no-store"},
+            )
+
+
+_registration_ip_limiter, _registration_email_limiter = _auth_limiters(5, 3600, "registration")
+_recovery_ip_limiter, _recovery_email_limiter = _auth_limiters(3, 3600, "recovery")
+_otp_verify_ip_limiter, _otp_verify_email_limiter = _auth_limiters(10, 300, "otp_verify")
+
+
 @router.post("/register")
-async def register(request: RegisterRequest):
+async def register(request: RegisterRequest, http_request: Request):
     try:
         registration_enabled = setting_enabled("features.registration_enabled")
     except SystemSettingsUnavailable:
@@ -188,6 +255,7 @@ async def register(request: RegisterRequest):
     if not registration_enabled:
         raise HTTPException(status_code=403, detail="التسجيل الجديد متوقف حالياً بقرار من إدارة النظام")
     email = normalize_email(str(request.email))
+    await _enforce_auth_limits(http_request, email, (_registration_ip_limiter, _registration_email_limiter))
     log_event(logger, logging.INFO, "registration_started", recipient=mask_email(email))
     display_name = request.display_name.strip()
     if not display_name:
@@ -198,10 +266,8 @@ async def register(request: RegisterRequest):
     try:
         existing = get_user_by_email(email)
         if existing and existing.get("email_verified"):
-            raise HTTPException(
-                status_code=400,
-                detail="هذا البريد الإلكتروني مسجل بالفعل. يرجى تسجيل الدخول بدلاً من ذلك."
-            )
+            # Return the same response as the non-existing account case.
+            return {"success": True, "message": _generic_auth_message()}
 
         # STRICT SECURITY POLICY: Do NOT create any record in custom_users before OTP verification!
         password_hash = hash_password(request.password)
@@ -223,19 +289,14 @@ _login_limiter = UpstashRateLimiter(
     limit=10,
     window_seconds=900,
     fail_closed=os.getenv("NABEH_LOGIN_RATE_LIMIT_FAIL_CLOSED", os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true")).lower() in {"1", "true", "yes"},
+    namespace="nabeh:auth:login:email",
 )
 
 
 @router.post("/login")
 async def login(request: LoginRequest, response: Response, http_request: Request):
     log_event(logger, logging.INFO, "login_started", recipient=mask_email(str(request.email)))
-    decision = await _login_limiter.check(client_identity(http_request))
-    if not decision.allowed:
-        raise HTTPException(
-            status_code=429,
-            detail="تم تجاوز عدد محاولات الدخول. حاول لاحقًا.",
-            headers={"Retry-After": str(decision.retry_after or 60), "Cache-Control": "no-store"},
-        )
+    await _enforce_auth_limits(http_request, str(request.email), (_login_ip_limiter, _login_limiter))
     try:
         user = get_user_by_email(normalize_email(str(request.email)))
         if not user or not user.get("email_verified") or user.get("status", "ACTIVE") != "ACTIVE" or not verify_password(request.password, user["password_hash"]):
@@ -251,8 +312,17 @@ async def login(request: LoginRequest, response: Response, http_request: Request
     return {"success": True, "data": {"access_token": token, "user_id": user["id"], "email": user["email"]}}
 
 
+_login_ip_limiter = UpstashRateLimiter(
+    limit=30,
+    window_seconds=900,
+    fail_closed=_AUTH_RATE_LIMIT_FAIL_CLOSED,
+    namespace="nabeh:auth:login:ip",
+)
+
+
 @router.post("/forgot-password")
-async def forgot_password(request: ForgotPasswordRequest):
+async def forgot_password(request: ForgotPasswordRequest, http_request: Request):
+    await _enforce_auth_limits(http_request, str(request.email), (_recovery_ip_limiter, _recovery_email_limiter))
     log_event(logger, logging.INFO, "password_recovery_started", recipient=mask_email(str(request.email)))
     try:
         user = get_user_by_email(normalize_email(str(request.email)))
@@ -265,15 +335,30 @@ async def forgot_password(request: ForgotPasswordRequest):
 
 
 _resend_limiter = UpstashRateLimiter(
+    limit=20,
+    window_seconds=3600,
+    fail_closed=_AUTH_RATE_LIMIT_FAIL_CLOSED,
+    namespace="nabeh:auth:resend:ip",
+)
+_resend_email_limiter = UpstashRateLimiter(
     limit=5,
     window_seconds=3600,
-    fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true").lower() in {"1", "true", "yes"},
+    fail_closed=_AUTH_RATE_LIMIT_FAIL_CLOSED,
+    namespace="nabeh:auth:resend:email",
 )
-_resend_cooldown_limiter = UpstashRateLimiter(
+_resend_cooldown_ip_limiter = UpstashRateLimiter(
+    limit=5,
+    window_seconds=60,
+    fail_closed=_AUTH_RATE_LIMIT_FAIL_CLOSED,
+    namespace="nabeh:auth:resend:cooldown:ip",
+)
+_resend_cooldown_email_limiter = UpstashRateLimiter(
     limit=1,
     window_seconds=60,
-    fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true").lower() in {"1", "true", "yes"},
+    fail_closed=_AUTH_RATE_LIMIT_FAIL_CLOSED,
+    namespace="nabeh:auth:resend:cooldown:email",
 )
+_resend_cooldown_limiter = _resend_cooldown_email_limiter
 
 
 @router.post("/resend-otp")
@@ -281,16 +366,8 @@ async def resend_otp(request: ResendOtpRequest, http_request: Request):
     """Resend signup/recovery OTP without revealing account existence or creating unverified accounts."""
     email = normalize_email(str(request.email))
     log_event(logger, logging.INFO, "otp_resend_started", action=request.type, recipient=mask_email(email))
-    identity = f"{client_identity(http_request)}:{email}"
-    cooldown_decision = await _resend_cooldown_limiter.check(identity)
-    hourly_decision = await _resend_limiter.check(identity)
-    decision = cooldown_decision if not cooldown_decision.allowed else hourly_decision
-    if not decision.allowed:
-        raise HTTPException(
-            status_code=429,
-            detail="تم تجاوز عدد طلبات إعادة الإرسال. حاول لاحقًا.",
-            headers={"Retry-After": str(decision.retry_after or 60), "Cache-Control": "no-store"},
-        )
+    await _enforce_auth_limits(http_request, email, (_resend_limiter, _resend_email_limiter))
+    await _enforce_auth_limits(http_request, email, (_resend_cooldown_ip_limiter, _resend_cooldown_email_limiter))
 
     try:
         if request.type == "signup":
@@ -330,19 +407,18 @@ async def resend_otp(request: ResendOtpRequest, http_request: Request):
 
 
 @router.post("/verify-otp")
-async def verify_otp(request: VerifyOtpRequest, response: Response):
+async def verify_otp(request: VerifyOtpRequest, response: Response, http_request: Request):
     """Verify OTP code. Accounts are created in custom_users ONLY when signup OTP is valid!"""
     email = normalize_email(str(request.email))
     purpose = "recovery" if request.type == "recovery" else "signup"
+    await _enforce_auth_limits(http_request, email, (_otp_verify_ip_limiter, _otp_verify_email_limiter))
     log_event(logger, logging.INFO, "otp_verification_started", purpose=purpose, recipient=mask_email(email))
 
     try:
         if purpose == "signup":
             existing_user = get_user_by_email(email)
             if existing_user and existing_user.get("email_verified"):
-                token = issue_access_token(existing_user)
-                response.headers["Cache-Control"] = "no-store, private"
-                return {"success": True, "data": {"access_token": token, "purpose": purpose}}
+                raise ValueError("signup is already verified")
 
             result = supabase.table("custom_auth_otps").select(
                 "id,user_id,email,code_hash,expires_at,attempts,consumed_at"
@@ -360,14 +436,14 @@ async def verify_otp(request: VerifyOtpRequest, response: Response):
             if len(parts) >= 4 and parts[0] == "signup":
                 _, stored_otp_hash, b64_pass, b64_name = parts[0], parts[1], parts[2], parts[3]
                 if not hmac.compare_digest(hash_otp(request.token), stored_otp_hash):
-                    supabase.table("custom_auth_otps").update({"attempts": int(otp.get("attempts", 0)) + 1}).eq("id", otp["id"]).execute()
+                    _increment_otp_attempts(otp)
                     raise ValueError("otp mismatch")
 
                 password_hash = base64.b64decode(b64_pass.encode("utf-8")).decode("utf-8")
                 display_name = base64.b64decode(b64_name.encode("utf-8")).decode("utf-8")
 
                 # NOW CREATE AND INSERT THE VERIFIED USER RECORD IN CUSTOM_USERS!
-                user_id = str(uuid4())
+                user_id = str(existing_user["id"]) if existing_user else str(uuid4())
                 try:
                     default_language = get_system_settings().get("ui.default_language", "ar")
                 except SystemSettingsUnavailable:
@@ -378,23 +454,37 @@ async def verify_otp(request: VerifyOtpRequest, response: Response):
                     "display_name": display_name,
                     "password_hash": password_hash,
                     "email_verified": True,
+                    "auth_token_version": int(existing_user.get("auth_token_version", 0) or 0) if existing_user else 0,
                     "preferred_language": default_language,
                     "created_at": _now().isoformat(),
                     "updated_at": _now().isoformat(),
                 }
-                supabase.table("custom_users").insert(user).execute()
+                if existing_user:
+                    updated = supabase.table("custom_users").update({
+                        "display_name": display_name,
+                        "password_hash": password_hash,
+                        "email_verified": True,
+                        "preferred_language": default_language,
+                        "updated_at": _now().isoformat(),
+                    }).eq("id", user_id).eq("email_verified", False).select("id").execute()
+                    if not updated.data:
+                        raise ValueError("pending user state changed")
+                else:
+                    supabase.table("custom_users").insert(user).execute()
             else:
                 # Fallback for legacy OTP format if present
                 stored_hash = parts[-1]
                 if not hmac.compare_digest(hash_otp(request.token), stored_hash):
-                    supabase.table("custom_auth_otps").update({"attempts": int(otp.get("attempts", 0)) + 1}).eq("id", otp["id"]).execute()
+                    _increment_otp_attempts(otp)
                     raise ValueError("otp mismatch")
                 user = get_user_by_email(email)
                 if not user:
                     raise ValueError("unknown user")
-                supabase.table("custom_users").update({"email_verified": True, "updated_at": _now().isoformat()}).eq("id", user["id"]).execute()
+                updated = supabase.table("custom_users").update({"email_verified": True, "updated_at": _now().isoformat()}).eq("id", user["id"]).eq("email_verified", False).select("id").execute()
+                if not updated.data:
+                    raise ValueError("pending user state changed")
 
-            supabase.table("custom_auth_otps").update({"consumed_at": _now().isoformat()}).eq("id", otp["id"]).execute()
+            _consume_otp(otp)
             token = issue_access_token(user)
 
         else:  # purpose == "recovery"
@@ -416,10 +506,10 @@ async def verify_otp(request: VerifyOtpRequest, response: Response):
 
             stored_hash = otp["code_hash"].split("$")[-1]
             if not hmac.compare_digest(hash_otp(request.token), stored_hash):
-                supabase.table("custom_auth_otps").update({"attempts": int(otp.get("attempts", 0)) + 1}).eq("id", otp["id"]).execute()
+                _increment_otp_attempts(otp)
                 raise ValueError("otp mismatch")
 
-            supabase.table("custom_auth_otps").update({"consumed_at": _now().isoformat()}).eq("id", otp["id"]).execute()
+            _consume_otp(otp)
             token = issue_access_token(user, purpose="password_reset")
 
     except ValueError:
@@ -438,10 +528,13 @@ async def reset_password(request: ResetPasswordRequest, response: Response, auth
     log_event(logger, logging.INFO, "password_reset_started")
     try:
         user = get_reset_user(_bearer_token(authorization))
-        supabase.table("custom_users").update({
+        updated = supabase.table("custom_users").update({
             "password_hash": hash_password(request.new_password),
+            "auth_token_version": int(user.get("auth_token_version", 0) or 0) + 1,
             "updated_at": _now().isoformat(),
-        }).eq("id", user["id"]).execute()
+        }).eq("id", user["id"]).eq("auth_token_version", int(user.get("auth_token_version", 0) or 0)).select("id").execute()
+        if not updated.data:
+            raise ValueError("account state changed")
     except AuthSecurityError:
         raise HTTPException(status_code=401, detail="جلسة الاستعادة غير صالحة") from None
     except Exception:
@@ -468,3 +561,20 @@ async def get_current_user_profile(response: Response, authorization: Optional[s
         "status": user.get("status", "ACTIVE"),
         "email_verified": bool(user.get("email_verified")),
     }}
+
+
+@router.post("/logout")
+async def logout(response: Response, authorization: Optional[str] = Header(None)):
+    response.headers["Cache-Control"] = "no-store, private"
+    try:
+        user = get_authenticated_user(_bearer_token(authorization))
+    except (AuthSecurityError, HTTPException):
+        raise HTTPException(status_code=401, detail="جلسة غير صالحة") from None
+    current_version = int(user.get("auth_token_version", 0) or 0)
+    result = supabase.table("custom_users").update({
+        "auth_token_version": current_version + 1,
+        "updated_at": _now().isoformat(),
+    }).eq("id", user["id"]).eq("auth_token_version", current_version).select("id").execute()
+    if not result.data:
+        raise HTTPException(status_code=409, detail="تغيرت الجلسة؛ أعد المحاولة")
+    return {"success": True}

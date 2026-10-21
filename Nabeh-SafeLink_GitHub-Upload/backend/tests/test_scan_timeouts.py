@@ -20,3 +20,13 @@ async def test_text_scan_uses_local_fallback_when_ai_times_out(monkeypatch):
     assert result["classification"] == "SAFE"
     assert result["source"] == "LOCAL_TIMEOUT_FALLBACK"
     assert result["explanation"]["provider"] == "LOCAL_TIMEOUT_FALLBACK"
+
+
+def test_gemini_cannot_downgrade_dangerous_evidence():
+    result = service.ScanService._enforce_text_safety_floor(
+        {"classification": "DANGEROUS", "confidence": 0.91},
+        {"classification": "UNKNOWN", "confidence": None},
+        {"classification": "SAFE", "confidence": 0.99},
+    )
+    assert result["classification"] == "DANGEROUS"
+    assert result["confidence"] == 0.91

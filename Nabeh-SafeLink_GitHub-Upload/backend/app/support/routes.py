@@ -36,6 +36,7 @@ def _get_required_user_id(authorization: Optional[str]) -> str:
         user = get_authenticated_user(parts[1])
         if not user or not user.get("id"):
             raise HTTPException(status_code=401, detail="التواصل مع المطور يتطلب حساباً مفعّلاً")
+        require_latest_terms(user)
         return str(user["id"])
     except AuthSecurityError:
         raise HTTPException(status_code=401, detail="جلسة منتهية الصلاحية. يرجى إعادة تسجيل الدخول")
@@ -95,3 +96,4 @@ async def create_support_request(
         # Do not report success when the ticket was not persisted. Returning
         # 200 here creates a false support record and prevents safe retries.
         raise HTTPException(status_code=503, detail="تعذر حفظ طلب الدعم حاليًا. حاول لاحقًا.") from None
+from app.legal.terms_consent import require_latest_terms

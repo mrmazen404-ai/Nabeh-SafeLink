@@ -26,6 +26,7 @@ class Settings:
     ADMIN_IP_SALT: str = os.getenv("ADMIN_IP_SALT", "")
     VISITOR_HASH_SALT: str = os.getenv("VISITOR_HASH_SALT", "")
     SCAN_AI_TIMEOUT_SECONDS: float = float(os.getenv("SCAN_AI_TIMEOUT_SECONDS", "18"))
+    SCAN_TOTAL_TIMEOUT_SECONDS: float = max(1.0, float(os.getenv("SCAN_TOTAL_TIMEOUT_SECONDS", "30")))
     NABEH_TRUST_PROXY_HEADERS: bool = os.getenv("NABEH_TRUST_PROXY_HEADERS", "false").lower() in {"1", "true", "yes"}
     APP_NAME: str = os.getenv("APP_NAME", "Nabeh SafeLink")
     APP_VERSION: str = os.getenv("APP_VERSION", "1.0.0")

@@ -86,6 +86,7 @@ async def dashboard_websocket(websocket: WebSocket):
                 return
 
             user = get_authenticated_user(token)
+            require_latest_terms(user)
             if user.get("status", "ACTIVE") != "ACTIVE":
                 await websocket.close(code=1008, reason="inactive user")
                 return
@@ -133,6 +134,7 @@ def _require_user(authorization: Optional[str]) -> dict:
     if user.get("status", "ACTIVE") != "ACTIVE":
         log_event(logger, logging.WARNING, "dashboard_suspended_user_blocked")
         raise HTTPException(status_code=403, detail="الحساب موقوف")
+    require_latest_terms(user)
     return user
 
 
@@ -327,7 +329,14 @@ async def change_password(payload: PasswordChange, response: Response, authoriza
     if not verify_password(payload.current_password, user["password_hash"]):
         log_event(logger, logging.WARNING, "password_change_rejected")
         raise HTTPException(status_code=400, detail="كلمة المرور الحالية غير صحيحة")
-    supabase.table("custom_users").update({"password_hash": hash_password(payload.new_password), "updated_at": _now()}).eq("id", str(user["id"])).execute()
+    current_version = int(user.get("auth_token_version", 0) or 0)
+    updated = supabase.table("custom_users").update({
+        "password_hash": hash_password(payload.new_password),
+        "auth_token_version": current_version + 1,
+        "updated_at": _now(),
+    }).eq("id", str(user["id"])).eq("auth_token_version", current_version).select("id").execute()
+    if not updated.data:
+        raise HTTPException(status_code=409, detail="تغيرت الجلسة؛ أعد تسجيل الدخول")
     log_event(logger, logging.INFO, "password_changed")
     return {"success": True, "message": "تم تغيير كلمة المرور بنجاح"}
 
@@ -486,29 +495,19 @@ async def delete_account(payload: AccountDeletionConfirmation, response: Respons
     deletion_id = deletion.data[0]["id"]
     now = _now()
     try:
-        scans = supabase.table("scans").select("id").eq("user_id", user_id).execute()
-        scan_ids = [row["id"] for row in (scans.data or []) if row.get("id")]
-        if scan_ids:
-            for table in ("scan_signals", "scan_explanations", "scan_fraud_types", "email_header_analyses"):
-                supabase.table(table).delete().in_("scan_id", scan_ids).execute()
-            supabase.table("scans").update({"user_id": None, "input_value_masked": None, "analysis_snapshot": None, "user_hidden_at": now, "user_deleted_at": now}).in_("id", scan_ids).execute()
-        supabase.table("feedback").delete().eq("user_id", user_id).execute()
-        supabase.table("notifications").delete().eq("user_id", user_id).execute()
-        supabase.table("notification_preferences").delete().eq("user_id", user_id).execute()
-        supabase.table("privacy_consents").delete().eq("user_id", user_id).execute()
-        supabase.table("custom_auth_otps").delete().eq("user_id", user_id).execute()
-        supabase.table("api_keys").delete().eq("user_id", user_id).execute()
-        supabase.table("integrations").delete().eq("user_id", user_id).execute()
-        supabase.table("uploaded_files").delete().eq("user_id", user_id).execute()
-        supabase.table("user_profiles").delete().eq("user_id", user_id).execute()
-        supabase.table("support_requests").update({"user_id": None, "email": None, "message": "تمت إزالة بيانات صاحب الحساب بناءً على طلب الحذف.", "status": "CLOSED", "resolved_at": now}).eq("user_id", user_id).execute()
-        supabase.table("audit_logs").update({"actor_user_id": None, "metadata_masked": {"event": "ACCOUNT_DELETED", "user_reference": "removed"}}).eq("actor_user_id", user_id).execute()
-        replacement_email = f"deleted-{secrets.token_hex(12)}@deleted.invalid"
-        supabase.table("custom_users").update({"email": replacement_email, "display_name": "Deleted user", "password_hash": hash_password(secrets.token_urlsafe(32)), "status": "DELETED", "email_verified": False, "updated_at": now}).eq("id", user_id).execute()
-        supabase.table("account_deletion_requests").update({"status": "COMPLETED", "confirmed_at": now, "completed_at": now}).eq("id", deletion_id).execute()
+        result = supabase.rpc("nabeh_delete_user_account", {
+            "p_user_id": user_id,
+            "p_deletion_id": deletion_id,
+            "p_replacement_email": f"deleted-{secrets.token_hex(12)}@deleted.invalid",
+            "p_replacement_password_hash": hash_password(secrets.token_urlsafe(32)),
+            "p_deleted_at": now,
+        }).execute()
+        if result.data is not True:
+            raise RuntimeError("atomic account deletion did not complete")
         log_event(logger, logging.INFO, "account_deletion_completed")
         return {"success": True, "message": "تم حذف بيانات الحساب وتعطيله بنجاح"}
     except Exception:
         logger.exception("account_deletion_failed")
         supabase.table("account_deletion_requests").update({"status": "FAILED", "failure_reason": "processing_error"}).eq("id", deletion_id).execute()
         raise HTTPException(status_code=503, detail="تعذر إكمال حذف الحساب؛ قد تكون بعض البيانات عولجت جزئيًا. تواصل مع الدعم للتحقق") from None
+from app.legal.terms_consent import require_latest_terms
