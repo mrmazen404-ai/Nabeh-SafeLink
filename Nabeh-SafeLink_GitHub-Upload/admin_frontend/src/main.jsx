@@ -8,14 +8,15 @@ const api = axios.create({ baseURL: import.meta.env.VITE_ADMIN_API_URL || '/api/
 const accessKey = 'nabeh_admin_access_token';
 const refreshKey = 'nabeh_admin_refresh_token';
 const getAccess = () => sessionStorage.getItem(accessKey);
-const clearTokens = () => { sessionStorage.removeItem(accessKey); localStorage.removeItem(refreshKey); };
+const getRefresh = () => sessionStorage.getItem(refreshKey);
+const clearTokens = () => { sessionStorage.removeItem(accessKey); sessionStorage.removeItem(refreshKey); };
 
 async function refreshSession() {
-  const refreshToken = localStorage.getItem(refreshKey);
+  const refreshToken = getRefresh();
   if (!refreshToken) throw new Error('No administrator refresh token');
   const { data } = await api.post('/auth/refresh', { refresh_token: refreshToken });
   sessionStorage.setItem(accessKey, data.data.access_token);
-  localStorage.setItem(refreshKey, data.data.refresh_token);
+  sessionStorage.setItem(refreshKey, data.data.refresh_token);
   return data.data.access_token;
 }
 
@@ -115,6 +116,43 @@ function Login({ onComplete, initialMessage = '' }) {
   </section></main>;
 }
 
+function InvitationAcceptPage() {
+  const token = new URLSearchParams(window.location.search).get('token') || '';
+  const [form, setForm] = useState({ email: '', display_name: '', password: '', confirm: '' });
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [success, setSuccess] = useState(false);
+  const change = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+  async function submit(event) {
+    event.preventDefault();
+    setMessage('');
+    if (!token) return setMessage('رابط الدعوة غير صالح.');
+    if (form.password !== form.confirm) return setMessage('كلمتا المرور غير متطابقتين.');
+    setBusy(true);
+    try {
+      await api.post('/auth/invitations/accept', { token, email: form.email, display_name: form.display_name, password: form.password });
+      setSuccess(true);
+      setMessage('تم إنشاء حساب المسؤول. يمكنك العودة لتسجيل الدخول وإكمال إعداد المصادقة الثنائية.');
+    } catch (error) {
+      setMessage(error.response?.data?.detail || 'تعذر قبول الدعوة أو ربما انتهت صلاحيتها.');
+    } finally { setBusy(false); }
+  }
+  return <main className="auth-page"><section className="auth-card">
+    <div className="brand"><span className="brand-mark">N</span><div><small>Nabeh SafeLink</small><h1>Admin Control</h1></div></div>
+    <div className="eyebrow">دعوة مسؤول محمية</div><h2>إنشاء حساب الإدارة</h2>
+    <p className="muted">أدخل بيانات الدعوة لإنشاء حسابك. سيتم طلب إعداد المصادقة الثنائية عند أول دخول.</p>
+    {!success && <form onSubmit={submit}>
+      <label>البريد الإلكتروني<input name="email" type="email" autoComplete="email" value={form.email} onChange={change} required /></label>
+      <label>الاسم<input name="display_name" autoComplete="name" value={form.display_name} onChange={change} required minLength="1" maxLength="100" /></label>
+      <label>كلمة المرور<input name="password" type="password" autoComplete="new-password" value={form.password} onChange={change} required minLength="12" maxLength="128" /></label>
+      <label>تأكيد كلمة المرور<input name="confirm" type="password" autoComplete="new-password" value={form.confirm} onChange={change} required minLength="12" maxLength="128" /></label>
+      <button className="primary" disabled={busy}>{busy ? 'جارٍ إنشاء الحساب...' : 'قبول الدعوة'}</button>
+    </form>}
+    {message && <div className={success ? 'notice success-notice' : 'notice'}>{message}</div>}
+    {success && <button className="filter-button" onClick={() => { window.location.href = '/'; }}>العودة إلى تسجيل الدخول</button>}
+  </section></main>;
+}
+
 function Shell({ profile, path, go, onLogout, children }) {
   const [dark, setDark] = useState(document.documentElement.dataset.theme === 'dark');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -187,17 +225,17 @@ function ProtectedPage({ profile, path, go }) {
 
 function App() {
   const { path, go } = useNavigation();
-  const [stage, setStage] = useState(getAccess() && localStorage.getItem(refreshKey) ? 'loading' : 'login');
+  const [stage, setStage] = useState(getAccess() && getRefresh() ? 'loading' : 'login');
   const [profile, setProfile] = useState(null);
   const [initialMessage, setInitialMessage] = useState('');
   const loadProfile = async () => { try { const { data } = await api.get('/auth/me', { headers: { Authorization: `Bearer ${getAccess()}` } }); setProfile(data.data); setStage('shell'); } catch { clearTokens(); setStage('login'); setInitialMessage('انتهت جلسة الإدارة. يرجى تسجيل الدخول من جديد.'); } };
   useEffect(() => { const expired = () => { clearTokens(); setProfile(null); setStage('login'); setInitialMessage('انتهت جلسة الإدارة. يرجى تسجيل الدخول من جديد.'); }; window.addEventListener('admin-session-expired', expired); if (stage === 'loading') loadProfile(); return () => window.removeEventListener('admin-session-expired', expired); }, [stage]);
-  const complete = (data) => { sessionStorage.setItem(accessKey, data.access_token); localStorage.setItem(refreshKey, data.refresh_token); setInitialMessage(''); loadProfile(); };
+  const complete = (data) => { sessionStorage.setItem(accessKey, data.access_token); sessionStorage.setItem(refreshKey, data.refresh_token); setInitialMessage(''); loadProfile(); };
   const logout = async () => { try { if (getAccess()) await api.post('/auth/logout', {}, { headers: { Authorization: `Bearer ${getAccess()}` } }); } catch {} clearTokens(); setProfile(null); setStage('login'); go('/'); };
   const title = useMemo(() => stage === 'shell' ? 'Admin Shell' : 'Admin Login', [stage]);
   useEffect(() => { document.title = `Nabeh ${title}`; }, [title]);
   if (stage === 'loading') return <main className="loading-page"><div className="loader" /><p>جارٍ تأمين جلسة الإدارة...</p></main>;
-  if (stage === 'login') return <Login onComplete={complete} initialMessage={initialMessage} />;
+  if (stage === 'login') return window.location.pathname === '/invite' ? <InvitationAcceptPage /> : <Login onComplete={complete} initialMessage={initialMessage} />;
   return <Shell profile={profile} path={path} go={go} onLogout={logout}><ProtectedPage profile={profile} path={path} go={go} /></Shell>;
 }
 

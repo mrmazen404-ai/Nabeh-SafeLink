@@ -13,7 +13,7 @@ from app.admin.security import (
     AdminSecurityError, decrypt_totp_secret, encrypt_totp_secret, hash_password,
     hash_value, issue_access_token, issue_challenge_token, issue_setup_token,
     new_refresh_token, now, recovery_hash, refresh_hash, totp_uri, verify_password,
-    verify_totp,
+    verify_totp_step,
 )
 from app.config import settings
 from app.db.supabase_client import supabase
@@ -43,6 +43,13 @@ class RefreshRequest(BaseModel):
 class InviteRequest(BaseModel):
     email: EmailStr
     role: Literal["SUPERVISOR", "ADMIN", "SUPER_ADMIN"] = "SUPERVISOR"
+
+
+class InvitationAcceptRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+    email: EmailStr
+    display_name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=12, max_length=128)
 
 
 class UserStatusRequest(BaseModel):
@@ -118,25 +125,49 @@ def _tokens(admin: dict, request: Request, token_family: str | None = None) -> d
     return {"access_token": access, "refresh_token": refresh, "session_id": session_id}
 
 
+def _claim_totp_step(method_id: str, step: int) -> bool:
+    """Atomically consume a TOTP step; concurrent requests cannot reuse it."""
+    result = (
+        supabase.table("admin_2fa_methods")
+        .update({"last_used_step": step})
+        .eq("id", method_id)
+        .or_(f"last_used_step.is.null,last_used_step.lt.{step}")
+        .select("id")
+        .execute()
+    )
+    return bool(result.data)
+
+
+def _setup_rate_limited(admin_id: str, ip_hash: str) -> bool:
+    result = (
+        supabase.table("admin_login_attempts")
+        .select("id", count="exact", head=True)
+        .eq("admin_user_id", admin_id)
+        .eq("ip_hash", ip_hash)
+        .eq("outcome", "INVALID_2FA")
+        .eq("failure_reason", "SETUP_CONFIRM")
+        .gte("created_at", (now() - timedelta(minutes=15)).isoformat())
+        .execute()
+    )
+    return (result.count or 0) >= settings.ADMIN_LOGIN_RATE_LIMIT
+
+
 @router.post("/auth/bootstrap", status_code=201)
 def bootstrap(request: BootstrapRequest, http_request: Request, bootstrap_token: str | None = Header(None, alias="X-Admin-Bootstrap-Token")):
     """Create the first SUPER_ADMIN only when the one-time server bootstrap secret matches."""
     if not settings.ADMIN_BOOTSTRAP_TOKEN or not bootstrap_token or bootstrap_token != settings.ADMIN_BOOTSTRAP_TOKEN:
         raise HTTPException(status_code=404, detail="Not found")
-    existing = supabase.table("admin_users").select("id").limit(1).execute()
-    if existing.data:
-        raise HTTPException(status_code=409, detail="Admin bootstrap is already completed")
-    row = {
-        "email": str(request.email).strip().lower(),
-        "display_name": request.display_name.strip(),
-        "password_hash": hash_password(request.password),
-        "role": "SUPER_ADMIN",
-        "status": "ACTIVE",
-        "email_verified": True,
-        "two_factor_required": True,
-    }
-    result = supabase.table("admin_users").insert(row).execute()
-    admin = result.data[0]
+    try:
+        result = supabase.rpc("admin_bootstrap_first", {
+            "p_email": str(request.email).strip().lower(),
+            "p_display_name": request.display_name.strip(),
+            "p_password_hash": hash_password(request.password),
+        }).execute()
+        admin = result.data if isinstance(result.data, dict) else (result.data or [None])[0]
+    except Exception:
+        raise HTTPException(status_code=409, detail="Admin bootstrap is already completed or unavailable") from None
+    if not admin:
+        raise HTTPException(status_code=503, detail="Unable to create the initial administrator")
     _audit(str(admin["id"]), "ADMIN_BOOTSTRAPPED", "admin_user", str(admin["id"]), http_request, after={"role": "SUPER_ADMIN", "status": "ACTIVE"})
     return {"success": True, "data": {"id": admin["id"], "email": admin["email"], "requires_2fa_setup": True}}
 
@@ -168,7 +199,7 @@ def login(request: LoginRequest, http_request: Request):
 @router.post("/auth/2fa/setup")
 def setup_2fa(http_request: Request, authorization: str | None = Header(None)):
     try:
-        claims = __import__("app.admin.security", fromlist=["decode_token"]).decode_token(bearer_token(authorization), ("access", "2fa_setup"))
+        claims = __import__("app.admin.security", fromlist=["decode_token"]).decode_token(bearer_token(authorization), "2fa_setup")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid setup authorization") from None
     admin = _admin_by_id(claims["sub"])
@@ -188,13 +219,20 @@ def _admin_by_id(admin_id: str) -> dict | None:
 @router.post("/auth/2fa/confirm")
 def confirm_2fa(request: CodeRequest, http_request: Request, authorization: str | None = Header(None)):
     try:
-        claims = __import__("app.admin.security", fromlist=["decode_token"]).decode_token(bearer_token(authorization), ("access", "2fa_setup"))
+        claims = __import__("app.admin.security", fromlist=["decode_token"]).decode_token(bearer_token(authorization), "2fa_setup")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid setup authorization") from None
+    ip_hash = hash_value(client_ip(http_request))
+    if _setup_rate_limited(claims["sub"], ip_hash):
+        raise HTTPException(status_code=429, detail="Too many 2FA setup attempts")
     method_result = supabase.table("admin_2fa_methods").select("*").eq("admin_user_id", claims["sub"]).limit(1).execute()
     method = method_result.data[0] if method_result.data else None
-    if not method or not verify_totp(decrypt_totp_secret(method["secret_ciphertext"]), request.code):
+    step = verify_totp_step(decrypt_totp_secret(method["secret_ciphertext"]), request.code) if method else None
+    if not method or step is None:
+        supabase.table("admin_login_attempts").insert({"admin_user_id": claims["sub"], "ip_hash": ip_hash, "outcome": "INVALID_2FA", "failure_reason": "SETUP_CONFIRM"}).execute()
         raise HTTPException(status_code=400, detail="Invalid authenticator code")
+    if not _claim_totp_step(method["id"], step):
+        raise HTTPException(status_code=409, detail="Authenticator code has already been used")
     codes = [secrets.token_urlsafe(8) for _ in range(10)]
     supabase.table("admin_2fa_methods").update({"is_enabled": True, "verified_at": now().isoformat()}).eq("id", method["id"]).execute()
     supabase.table("admin_2fa_recovery_codes").delete().eq("admin_user_id", claims["sub"]).execute()
@@ -217,7 +255,8 @@ def verify_2fa(request: CodeRequest, http_request: Request, authorization: str |
         raise HTTPException(status_code=429, detail="Too many 2FA attempts")
     method_result = supabase.table("admin_2fa_methods").select("*").eq("admin_user_id", claims["sub"]).limit(1).execute()
     method = method_result.data[0] if method_result.data else None
-    valid = bool(method and verify_totp(decrypt_totp_secret(method["secret_ciphertext"]), request.code))
+    step = verify_totp_step(decrypt_totp_secret(method["secret_ciphertext"]), request.code) if method else None
+    valid = bool(method and step is not None)
     recovery_row = None
     if not valid:
         recovery_result = supabase.table("admin_2fa_recovery_codes").select("id").eq(
@@ -230,7 +269,11 @@ def verify_2fa(request: CodeRequest, http_request: Request, authorization: str |
     if not valid:
         raise HTTPException(status_code=401, detail="Invalid authenticator code")
     if recovery_row:
-        supabase.table("admin_2fa_recovery_codes").update({"used_at": now().isoformat()}).eq("id", recovery_row["id"]).is_("used_at", "null").execute()
+        consumed = supabase.table("admin_2fa_recovery_codes").update({"used_at": now().isoformat()}).eq("id", recovery_row["id"]).is_("used_at", "null").select("id").execute()
+        if not consumed.data:
+            raise HTTPException(status_code=409, detail="Recovery code has already been used")
+    elif not _claim_totp_step(method["id"], step):
+        raise HTTPException(status_code=409, detail="Authenticator code has already been used")
     admin = _admin_by_id(claims["sub"])
     tokens = _tokens(admin, http_request)
     supabase.table("admin_users").update({"last_login_at": now().isoformat()}).eq("id", admin["id"]).execute()
@@ -563,11 +606,34 @@ def security_overview(
 def invite(request: InviteRequest, http_request: Request, admin: dict = Depends(require_roles("SUPER_ADMIN"))):
     if request.role == "SUPER_ADMIN" and admin["role"] != "SUPER_ADMIN":
         raise HTTPException(status_code=403, detail="Only SUPER_ADMIN can invite SUPER_ADMIN")
+    active = supabase.table("admin_invitations").select("id").eq(
+        "email", str(request.email).lower()
+    ).is_("accepted_at", "null").is_("revoked_at", "null").gt("expires_at", now().isoformat()).limit(1).execute()
+    if active.data:
+        raise HTTPException(status_code=409, detail="An active invitation already exists for this email")
     raw = new_refresh_token()
     result = supabase.table("admin_invitations").insert({"email": str(request.email).lower(), "role": request.role, "invited_by": admin["id"], "token_hash": refresh_hash(raw), "expires_at": (now() + timedelta(days=2)).isoformat()}).execute()
     invitation = result.data[0]
     _audit(str(admin["id"]), "ADMIN_INVITATION_CREATED", "admin_invitation", invitation["id"], http_request, after={"email": str(request.email).lower(), "role": request.role})
     return {"success": True, "data": {"id": invitation["id"], "token": raw, "expires_at": invitation["expires_at"]}}
+
+
+@router.post("/auth/invitations/accept", status_code=201)
+def accept_invitation(request: InvitationAcceptRequest, http_request: Request):
+    try:
+        result = supabase.rpc("admin_accept_invitation", {
+            "p_token_hash": refresh_hash(request.token),
+            "p_email": str(request.email).strip().lower(),
+            "p_display_name": request.display_name.strip(),
+            "p_password_hash": hash_password(request.password),
+        }).execute()
+        admin = result.data if isinstance(result.data, dict) else (result.data or [None])[0]
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invitation is invalid, expired, or already used") from None
+    if not admin:
+        raise HTTPException(status_code=503, detail="Unable to accept invitation")
+    _audit(str(admin["id"]), "ADMIN_INVITATION_ACCEPTED", "admin_invitation", str(admin["invitation_id"]), http_request, after={"role": admin["role"], "status": admin["status"]})
+    return {"success": True, "data": {"id": admin["id"], "email": admin["email"], "role": admin["role"], "requires_2fa_setup": True}}
 
 
 # ---------------------------------------------------------------------------
@@ -739,6 +805,9 @@ def update_support(
 
 @router.post("/notifications/broadcast")
 def broadcast_notification(request: BroadcastNotificationRequest, http_request: Request, admin: dict = Depends(require_permissions("users.manage"))):
+    count_result = supabase.table("custom_users").select("id", count="exact", head=True).eq("status", "ACTIVE").execute()
+    if (count_result.count or 0) > 10000:
+        raise HTTPException(status_code=413, detail="Broadcast audience exceeds the safe batch limit")
     users = supabase.table("custom_users").select("id").eq("status", "ACTIVE").limit(10000).execute().data or []
     rows = [{"user_id": str(user["id"]), "type": "SYSTEM", "title": request.title.strip(), "body": request.body.strip()} for user in users]
     for start in range(0, len(rows), 500):
@@ -769,10 +838,19 @@ def decide_deletion_request(
     result = supabase.table("account_deletion_requests").select("id,status,user_id").eq("id", str(request_id)).limit(1).execute()
     row = result.data[0] if result.data else None
     if not row: raise HTTPException(status_code=404, detail="طلب الحذف غير موجود")
+    allowed_transitions = {
+        "PENDING": {"CANCELLED"},
+        "CONFIRMED": {"PROCESSING", "CANCELLED"},
+        "PROCESSING": {"COMPLETED"},
+    }
+    if request.status not in allowed_transitions.get(row["status"], set()):
+        raise HTTPException(status_code=409, detail="Invalid deletion request state transition")
     payload = {"status": request.status, "processed_by_admin_id": str(admin["id"]), "decision_reason": request.reason}
     if request.status == "COMPLETED": payload["completed_at"] = now().isoformat()
     if request.status == "CANCELLED": payload["cancelled_at"] = now().isoformat()
-    updated = supabase.table("account_deletion_requests").update(payload).eq("id", str(request_id)).execute()
+    updated = supabase.table("account_deletion_requests").update(payload).eq("id", str(request_id)).eq("status", row["status"]).select("id,status,user_id").execute()
+    if not updated.data:
+        raise HTTPException(status_code=409, detail="Deletion request changed concurrently")
     _audit(str(admin["id"]), "ADMIN_DELETION_REQUEST_DECIDED", "account_deletion_request", str(request_id), http_request, before={"status": row["status"]}, after={"status": request.status, "reason": request.reason}, target_user_id=row.get("user_id"))
     return {"success": True, "data": (updated.data or [None])[0] or {**row, **payload}}
 

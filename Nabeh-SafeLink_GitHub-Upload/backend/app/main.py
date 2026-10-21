@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def application_lifespan(_app: FastAPI):
+    settings.validate_admin_security()
     log_event(
         logger,
         logging.INFO,

@@ -5,6 +5,7 @@ load_dotenv()
 
 
 class Settings:
+    ENVIRONMENT: str = os.getenv("NABEH_ENVIRONMENT", "development").lower()
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_PUBLISHABLE_KEY: str = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
     SUPABASE_SECRET_KEY: str = os.getenv("SUPABASE_SECRET_KEY", "")
@@ -35,6 +36,22 @@ class Settings:
         for origin in os.getenv("NABEH_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:5174").split(",")
         if origin.strip()
     )
+
+    def validate_admin_security(self) -> None:
+        if self.ENVIRONMENT not in {"production", "staging"}:
+            return
+        if len(self.ADMIN_JWT_SECRET) < 32:
+            raise RuntimeError("ADMIN_JWT_SECRET must be at least 32 characters in production")
+        if len(self.ADMIN_BOOTSTRAP_TOKEN) < 32:
+            raise RuntimeError("ADMIN_BOOTSTRAP_TOKEN must be at least 32 characters in production")
+        if len(self.ADMIN_IP_SALT) < 32:
+            raise RuntimeError("ADMIN_IP_SALT must be at least 32 characters in production")
+        if len(self.SUPABASE_SECRET_KEY) < 32:
+            raise RuntimeError("SUPABASE_SECRET_KEY is required in production")
+        if not self.ADMIN_TOTP_ENCRYPTION_KEY:
+            raise RuntimeError("ADMIN_TOTP_ENCRYPTION_KEY is required in production")
+        if not self.CORS_ALLOWED_ORIGINS:
+            raise RuntimeError("Explicit CORS origins are required in production")
 
 
 settings = Settings()

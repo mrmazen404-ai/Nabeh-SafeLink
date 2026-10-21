@@ -138,6 +138,19 @@ def verify_totp(secret: str, code: str) -> bool:
     return pyotp.TOTP(secret).verify(code.strip(), valid_window=1)
 
 
+def verify_totp_step(secret: str, code: str, at: datetime | None = None) -> int | None:
+    """Return the accepted TOTP step so callers can consume it atomically."""
+    totp = pyotp.TOTP(secret)
+    current = at or now()
+    current_step = totp.timecode(current)
+    normalized = code.strip()
+    for step in (current_step - 1, current_step, current_step + 1):
+        candidate_time = datetime.fromtimestamp(step * totp.interval, tz=timezone.utc)
+        if totp.verify(normalized, for_time=candidate_time, valid_window=0):
+            return step
+    return None
+
+
 def totp_uri(secret: str, email: str) -> str:
     return pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name=settings.ADMIN_TOTP_ISSUER)
 

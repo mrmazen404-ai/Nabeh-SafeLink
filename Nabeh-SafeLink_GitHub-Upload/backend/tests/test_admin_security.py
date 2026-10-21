@@ -1,5 +1,6 @@
 import base64
 import os
+from datetime import datetime, timezone
 
 os.environ.setdefault("ADMIN_JWT_SECRET", "a" * 64)
 os.environ.setdefault("ADMIN_IP_SALT", "b" * 32)
@@ -15,6 +16,7 @@ from app.admin.security import (
     issue_token,
     verify_password,
     verify_totp,
+    verify_totp_step,
 )
 
 
@@ -32,6 +34,16 @@ def test_admin_totp_secret_is_encrypted_and_verifiable():
     assert nonce
     assert decrypt_totp_secret(ciphertext) == secret
     assert verify_totp(secret, pyotp.TOTP(secret).now())
+
+
+def test_admin_totp_returns_accepted_step_for_atomic_replay_protection():
+    secret = pyotp.random_base32()
+    totp = pyotp.TOTP(secret)
+    at = datetime.fromtimestamp((int(datetime.now(timezone.utc).timestamp()) // totp.interval) * totp.interval + 5, tz=timezone.utc)
+    code = totp.at(at)
+    step = verify_totp_step(secret, code, at)
+    assert step == totp.timecode(at)
+    assert verify_totp_step(secret, "000000") is None
 
 
 def test_admin_jwt_is_separate_and_purpose_bound():
