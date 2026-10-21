@@ -433,58 +433,44 @@ async def verify_otp(request: VerifyOtpRequest, response: Response, http_request
                 raise ValueError("otp expired")
 
             parts = otp["code_hash"].split("$")
-            if len(parts) >= 4 and parts[0] == "signup":
-                _, stored_otp_hash, b64_pass, b64_name = parts[0], parts[1], parts[2], parts[3]
-                if not hmac.compare_digest(hash_otp(request.token), stored_otp_hash):
+            create_user = len(parts) >= 4 and parts[0] == "signup"
+            if create_user:
+                stored_hash = parts[1]
+                if not hmac.compare_digest(hash_otp(request.token), stored_hash):
                     _increment_otp_attempts(otp)
                     raise ValueError("otp mismatch")
-
-                password_hash = base64.b64decode(b64_pass.encode("utf-8")).decode("utf-8")
-                display_name = base64.b64decode(b64_name.encode("utf-8")).decode("utf-8")
-
-                # NOW CREATE AND INSERT THE VERIFIED USER RECORD IN CUSTOM_USERS!
-                user_id = str(existing_user["id"]) if existing_user else str(uuid4())
+                password_hash = base64.b64decode(parts[2].encode("utf-8")).decode("utf-8")
+                display_name = base64.b64decode(parts[3].encode("utf-8")).decode("utf-8")
                 try:
                     default_language = get_system_settings().get("ui.default_language", "ar")
                 except SystemSettingsUnavailable:
                     raise HTTPException(status_code=503, detail="تعذر تهيئة تفضيلات الحساب حالياً") from None
-                user = {
-                    "id": user_id,
-                    "email": email,
-                    "display_name": display_name,
-                    "password_hash": password_hash,
-                    "email_verified": True,
-                    "auth_token_version": int(existing_user.get("auth_token_version", 0) or 0) if existing_user else 0,
-                    "preferred_language": default_language,
-                    "created_at": _now().isoformat(),
-                    "updated_at": _now().isoformat(),
-                }
-                if existing_user:
-                    updated = supabase.table("custom_users").update({
-                        "display_name": display_name,
-                        "password_hash": password_hash,
-                        "email_verified": True,
-                        "preferred_language": default_language,
-                        "updated_at": _now().isoformat(),
-                    }).eq("id", user_id).eq("email_verified", False).select("id").execute()
-                    if not updated.data:
-                        raise ValueError("pending user state changed")
-                else:
-                    supabase.table("custom_users").insert(user).execute()
             else:
-                # Fallback for legacy OTP format if present
                 stored_hash = parts[-1]
                 if not hmac.compare_digest(hash_otp(request.token), stored_hash):
                     _increment_otp_attempts(otp)
                     raise ValueError("otp mismatch")
-                user = get_user_by_email(email)
-                if not user:
+                if not existing_user:
                     raise ValueError("unknown user")
-                updated = supabase.table("custom_users").update({"email_verified": True, "updated_at": _now().isoformat()}).eq("id", user["id"]).eq("email_verified", False).select("id").execute()
-                if not updated.data:
-                    raise ValueError("pending user state changed")
+                password_hash = ""
+                display_name = ""
+                default_language = existing_user.get("preferred_language", "ar")
 
-            _consume_otp(otp)
+            completed = supabase.rpc("nabeh_complete_signup_otp", {
+                "p_otp_id": otp["id"],
+                "p_user_id": existing_user["id"] if existing_user else str(uuid4()),
+                "p_email": email,
+                "p_code_hash": otp["code_hash"],
+                "p_attempts": int(otp.get("attempts", 0)),
+                "p_create_user": create_user,
+                "p_display_name": display_name,
+                "p_password_hash": password_hash,
+                "p_language": default_language,
+                "p_verified_at": _now().isoformat(),
+            }).execute()
+            user = completed.data
+            if not isinstance(user, dict) or not user.get("id"):
+                raise ValueError("signup verification transaction failed")
             token = issue_access_token(user)
 
         else:  # purpose == "recovery"

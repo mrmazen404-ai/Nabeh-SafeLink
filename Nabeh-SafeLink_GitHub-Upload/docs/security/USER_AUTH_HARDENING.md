@@ -11,3 +11,5 @@ Post-deployment checks should use a synthetic staging account: (1) wrong OTP for
 Before deploying the atomic privacy-deletion routes, also apply `backend/sql/user_privacy_deletion_atomic.sql`. It installs service-role-only PostgreSQL functions for per-scan and per-account deletion; the functions run in one database transaction, remove scan-specific evidence, anonymize retained scan/audit data, invalidate account sessions, and mark the deletion request complete. Do not deploy those route changes before this migration is installed.
 
 Apply `backend/sql/user_terms_consent_type.sql` before enabling mandatory latest-terms checks. It updates the `privacy_consents.consent_type` check constraint to allow the existing `TERMS_OF_USE` records used by `TermsConsentGate`; without it, consent recording and protected APIs will fail.
+
+Also apply `backend/sql/user_signup_otp_atomic.sql` after the token-version migration and before deploying the hardened signup route. The function consumes the OTP and inserts or verifies the account in one PostgreSQL transaction; a database failure rolls back both changes.
