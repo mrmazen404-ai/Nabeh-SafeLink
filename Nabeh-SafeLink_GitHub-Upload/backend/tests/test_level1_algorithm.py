@@ -6,21 +6,15 @@ from app.scans.service import ScanService
 
 
 class TestPredictorAndFeatures:
-    def test_verified_safe_whitelist_domains(self):
-        safe_urls = [
+    def test_domains_are_not_short_circuited_by_static_whitelist(self):
+        for url in (
             "https://www.google.com",
-            "https://google.com/search?q=test",
-            "https://salla.sa/my-store",
             "https://alrajhibank.com.sa/online",
             "https://moe.gov.sa/ar/pages/default.aspx",
-        ]
-        for url in safe_urls:
+        ):
             res = predict_url(url)
-            assert res["classification"] == "SAFE"
-            assert res["source"] == "VERIFIED_SAFE_DOMAIN"
-            assert res["confidence"] == 0.99
-            assert res["phishing_prob"] == 0.01
-
+            assert res["source"] != "VERIFIED_SAFE_DOMAIN"
+            assert res["source"] in {"ML_MODEL", "MODEL_UNAVAILABLE", "MODEL_ERROR"}
     def test_invalid_urls_return_unknown(self):
         invalid_inputs = [
             "",
@@ -89,14 +83,6 @@ class TestTextAndSmishingNLP:
 
 
 class TestVerdictFusionRules:
-    def test_whitelist_domain_tier0(self):
-        vt = {"status": "SAFE", "malicious": 0, "total_engines": 90}
-        ml = {"classification": "SAFE", "source": "VERIFIED_SAFE_DOMAIN"}
-        res = ScanService.combine_scan_results(vt, ml)
-        assert res["classification"] == "SAFE"
-        assert res["confidence"] == 0.99
-        assert res["source"] == "VERIFIED_SAFE_DOMAIN"
-
     def test_virustotal_consensus_tier1a(self):
         vt = {"status": "DANGEROUS", "malicious": 6, "total_engines": 92}
         ml = {"classification": "SAFE", "phishing_prob": 0.1}

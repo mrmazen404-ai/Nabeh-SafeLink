@@ -1,4 +1,4 @@
-"""Nabeh SafeLink ML URL predictor; whitelist matches never bypass analysis."""
+"""Nabeh SafeLink ML URL predictor."""
 
 import os
 import re
@@ -30,14 +30,6 @@ SUSPICIOUS_EXTENSIONS = (
     ".exe", ".scr", ".zip", ".rar", ".7z", ".msi",
     ".bat", ".cmd", ".js", ".jar", ".apk",
 )
-TOP_SAFE_DOMAINS = {
-    "google.com", "youtube.com", "microsoft.com", "apple.com", "amazon.com",
-    "github.com", "wikipedia.org", "cloudflare.com", "linkedin.com", "twitter.com",
-    "x.com", "instagram.com", "facebook.com", "whatsapp.com", "telegram.org",
-    "openai.com", "gov.sa", "edu.sa", "nic.sa", "moe.gov.sa", "moi.gov.sa",
-    "salla.sa", "zid.sa", "stc.com.sa", "mobily.com.sa", "alrajhibank.com.sa",
-    "snb.com.sa", "pypi.org", "npmjs.com", "python.org", "vercel.app",
-}
 # Preferred model is retrained LightGBM model, falling back to original model
 RETRAINED_MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model_retrained.joblib")
 ORIGINAL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model.joblib")
@@ -259,17 +251,6 @@ def predict_url(url: str) -> dict:
             "classification": "UNKNOWN",
             "confidence": 0.5,
             "source": "INVALID_URL",
-        }
-
-    registered_domain = f"{ext.domain}.{ext.suffix}".lower() if ext.domain and ext.suffix else host.lower()
-
-    # Check verified safe whitelist
-    if registered_domain in TOP_SAFE_DOMAINS or host.lower() in TOP_SAFE_DOMAINS or host.endswith(".gov.sa") or host.endswith(".edu.sa"):
-        return {
-            "classification": "SAFE",
-            "confidence": 0.99,
-            "phishing_prob": 0.01,
-            "source": "VERIFIED_SAFE_DOMAIN",
         }
 
     global model_bundle

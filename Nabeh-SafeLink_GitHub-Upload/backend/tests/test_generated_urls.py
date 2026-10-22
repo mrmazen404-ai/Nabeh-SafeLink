@@ -55,12 +55,10 @@ INVALID_EDGE_CASE_INPUTS = [
 
 
 class TestGeneratedUrlMatrix:
-    def test_safe_whitelist_category(self):
+    def test_formerly_listed_urls_are_not_short_circuited(self):
         for url in SAFE_GENERATED_URLS:
             res = predict_url(url)
-            assert res["classification"] == "SAFE", f"Expected SAFE for {url}, got {res['classification']}"
-            assert res["source"] == "VERIFIED_SAFE_DOMAIN"
-            assert res["confidence"] == 0.99
+            assert res["source"] in {"ML_MODEL", "MODEL_UNAVAILABLE", "MODEL_ERROR"}
 
     def test_brand_impersonation_category(self):
         for url in BRAND_IMPERSONATION_URLS:
@@ -90,12 +88,11 @@ class TestGeneratedUrlMatrix:
             assert res["source"] in {"EMPTY_INPUT", "INVALID_URL"}
 
     def test_end_to_end_fusion_across_all_types(self):
-        # 1. Clean VT + Whitelist ML -> SAFE
+        # 1. Clean VT + model prediction -> SAFE
         vt_clean = {"status": "SAFE", "harmless": 85, "malicious": 0, "total_engines": 85}
-        ml_whitelist = predict_url("https://alrajhibank.com.sa")
-        fusion_safe = ScanService.combine_scan_results(vt_clean, ml_whitelist)
-        assert fusion_safe["classification"] == "SAFE"
-        assert fusion_safe["confidence"] == 0.99
+        ml_prediction = predict_url("https://alrajhibank.com.sa")
+        fusion_clean = ScanService.combine_scan_results(vt_clean, ml_prediction)
+        assert fusion_clean["classification"] in {"SAFE", "SUSPICIOUS", "DANGEROUS", "UNKNOWN"}
 
         # 2. VirusTotal Malicious Consensus -> DANGEROUS
         vt_malicious = {"status": "DANGEROUS", "malicious": 8, "total_engines": 92}

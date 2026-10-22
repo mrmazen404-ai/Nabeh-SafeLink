@@ -153,27 +153,12 @@ class ScanService:
         has_vt = vt_total > 0 and vt_status in {"SAFE", "SUSPICIOUS", "DANGEROUS"}
 
         ml_class = str(ml_result.get("classification", "UNKNOWN")).upper()
-        ml_source = str(ml_result.get("source", ""))
         ml_prob = ml_result.get("phishing_prob")
         try:
             ml_prob = float(ml_prob)
             has_ml = ml_class in {"SAFE", "SUSPICIOUS", "DANGEROUS"} and 0.0 <= ml_prob <= 1.0
         except (TypeError, ValueError):
             ml_prob, has_ml = None, False
-
-        if ml_source == "WHITELIST":
-            has_ml = False
-
-        # ═══════════════════════════════════════════════════════════════════
-        # TIER 0: Verified Safe Domain Whitelist
-        # ═══════════════════════════════════════════════════════════════════
-        if ml_source == "VERIFIED_SAFE_DOMAIN" and vt_malicious == 0:
-            return {
-                "classification": "SAFE",
-                "confidence": 0.99,
-                "weighted_score": 0.01,
-                "source": "VERIFIED_SAFE_DOMAIN",
-            }
 
         # ═══════════════════════════════════════════════════════════════════
         # TIER 1: DANGEROUS — requires STRONG evidence
