@@ -21,7 +21,9 @@ router = APIRouter(prefix="/public", tags=["Public metrics"])
 _metrics_limiter = UpstashRateLimiter(
     limit=int(os.getenv("NABEH_PUBLIC_METRICS_RATE_LIMIT", "30")),
     window_seconds=int(os.getenv("NABEH_PUBLIC_METRICS_RATE_WINDOW_SECONDS", "60")),
-    fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true").lower() in {"1", "true", "yes"},
+    # Public aggregate metrics remain available if Redis is not configured;
+    # guest scanning keeps its stricter fail-closed policy separately.
+    fail_closed=os.getenv("NABEH_PUBLIC_METRICS_FAIL_CLOSED", "false").lower() in {"1", "true", "yes"},
     namespace="nabeh:public:metrics",
 )
 
