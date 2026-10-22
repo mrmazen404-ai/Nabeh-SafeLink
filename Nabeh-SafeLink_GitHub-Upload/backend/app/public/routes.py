@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.db.supabase_client import supabase
+from app.public.metrics import read_platform_scan_metrics
 from app.security.guest_rate_limit import UpstashRateLimiter, client_identity
 from app.system_settings import get_runtime_config, setting_enabled_fail_closed
 
@@ -21,6 +22,7 @@ _metrics_limiter = UpstashRateLimiter(
     limit=int(os.getenv("NABEH_PUBLIC_METRICS_RATE_LIMIT", "30")),
     window_seconds=int(os.getenv("NABEH_PUBLIC_METRICS_RATE_WINDOW_SECONDS", "60")),
     fail_closed=os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true").lower() in {"1", "true", "yes"},
+    namespace="nabeh:public:metrics",
 )
 
 
@@ -82,10 +84,7 @@ def public_overview(_: None = Depends(enforce_metrics_rate_limit)):
         active_res = supabase.table("site_visitors").select("id", count="exact", head=True).gte("last_seen_at", recent).execute()
         active_visitors = int(active_res.count or 0)
         users = _count("custom_users", [("status", "ACTIVE")])
-        scans = _count("scans")
-        safe = _count("scans", [("classification", "SAFE")])
-        suspicious = _count("scans", [("classification", "SUSPICIOUS")])
-        dangerous = _count("scans", [("classification", "DANGEROUS")])
+        scan_metrics = read_platform_scan_metrics()
 
         return {
             "success": True,
@@ -93,10 +92,11 @@ def public_overview(_: None = Depends(enforce_metrics_rate_limit)):
                 "visitors": total_visitors,
                 "active_visitors_30d": active_visitors,
                 "registered_users": users,
-                "scans": scans,
-                "safe_scans": safe,
-                "suspicious_scans": suspicious,
-                "dangerous_scans": dangerous,
+                "scans": scan_metrics["scans"],
+                "safe_scans": scan_metrics["safe_scans"],
+                "suspicious_scans": scan_metrics["suspicious_scans"],
+                "dangerous_scans": scan_metrics["dangerous_scans"],
+                "unknown_scans": scan_metrics["unknown_scans"],
                 "enabled": True,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             },

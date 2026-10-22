@@ -13,6 +13,7 @@ from app.ml.predictor import predict_url
 from app.virustotal.client import check_url_virustotal
 from app.dashboard.realtime import manager
 from app.config import settings
+from app.public.metrics import record_platform_scan_metric
 from app.system_settings import setting_enabled_fail_closed
 
 logger = logging.getLogger(__name__)
@@ -605,6 +606,11 @@ class ScanService:
             scan_res["input_value"] = raw_input
         scan_res["is_guest"] = True
         scan_res["scan_id"] = None
+        try:
+            await asyncio.to_thread(record_platform_scan_metric, scan_res.get("classification", "UNKNOWN"))
+        except Exception:
+            # Aggregate metrics must never make a guest scan fail.
+            logger.warning("guest_scan_metric_persistence_failed")
         log_event(logger, logging.INFO, "guest_scan_finished", operation_id=operation_id, classification=scan_res.get("classification"))
         return scan_res
 
@@ -653,6 +659,10 @@ class ScanService:
             if saved.data:
                 scan_id = saved.data[0].get("id")
                 scan_res["scan_id"] = scan_id
+                try:
+                    await asyncio.to_thread(record_platform_scan_metric, scan_res.get("classification", "UNKNOWN"))
+                except Exception:
+                    logger.warning("authenticated_scan_metric_persistence_failed")
                 try:
                     supabase.table("scans").update({"analysis_snapshot": scan_res.get("stages", {})}).eq("id", scan_id).eq("user_id", user_id).execute()
                 except Exception:

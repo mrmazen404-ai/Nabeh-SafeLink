@@ -21,3 +21,7 @@ def test_visitor_event_rejects_short_or_invalid_identifiers():
 
 def test_public_metrics_rate_limiter_is_fail_closed_by_default():
     assert routes._metrics_limiter.fail_closed is True
+
+
+def test_public_metrics_rate_limiter_has_an_isolated_namespace():
+    assert routes._metrics_limiter.namespace == "nabeh:public:metrics"
