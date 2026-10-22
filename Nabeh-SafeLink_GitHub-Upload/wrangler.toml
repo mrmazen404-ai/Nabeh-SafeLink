@@ -1,11 +1,5 @@
-name = "nabehsafelink"
+name = "safelink"
 compatibility_date = "2026-10-09"
-
-[site]
-bucket = "./frontend/dist"
 
 [assets]
 directory = "./frontend/dist"
-
-[build]
-command = "npm run build"
