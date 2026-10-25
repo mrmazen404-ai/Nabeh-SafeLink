@@ -15,6 +15,7 @@ from app.dashboard.realtime import manager
 from app.config import settings
 from app.public.metrics import record_platform_scan_metric
 from app.system_settings import setting_enabled_fail_closed
+from app.scans.text_rules import analyze_message_indicators
 
 logger = logging.getLogger(__name__)
 
@@ -53,36 +54,14 @@ class ScanService:
 
     @staticmethod
     def analyze_text_phishing(text: str, has_embedded_url: bool = False) -> dict:
-        text_lower = text.lower()
-        matches = [word for word in ARABIC_PHISHING_KEYWORDS if word in text_lower or word in text]
-
-        safe_greetings = (
-            "السلام عليكم", "سلام عليكم", "صباح الخير", "مساء الخير",
-            "مرحبا", "أهلا", "اهلاً", "شكرا", "شكراً", "كيف حالك",
-            "متى الموعد", "الله يعطيك العافية", "جزاك الله خير",
-            "عيد مبارك", "كل عام وأنتم بخير", "الحمد لله", "هلا", "مرفق"
-        )
-        has_safe_greeting = any(g in text for g in safe_greetings)
-
-        if len(matches) >= 3:
-            classification, confidence = ("DANGEROUS", 0.90) if has_embedded_url else ("SUSPICIOUS", 0.75)
-        elif len(matches) >= 1:
-            classification, confidence = ("DANGEROUS", 0.85) if has_embedded_url else ("SUSPICIOUS", 0.65)
-        elif has_safe_greeting or (not has_embedded_url and len(text.strip()) <= 120):
-            # Safe everyday greetings or normal short messages with no phishing keywords are SAFE 100%
-            classification, confidence = "SAFE", 0.99
-        elif not has_embedded_url and len(matches) == 0:
-            # Normal text with no embedded URL and no phishing keywords is SAFE
-            classification, confidence = "SAFE", 0.95
-        else:
-            classification, confidence = "UNKNOWN", None
-
+        signals = analyze_message_indicators(text, has_embedded_url=has_embedded_url)
+        text_lower = (text or "").lower()
+        matches = [word for word in ARABIC_PHISHING_KEYWORDS if word in text_lower or word in (text or "")]
         return {
-            "classification": classification,
-            "confidence": confidence,
+            **signals,
             "keyword_matches": matches,
             "match_count": len(matches),
-            "source": "SMS_TEXT_ANALYZER",
+            "source": "SMS_TEXT_INDICATORS",
         }
 
     @staticmethod
@@ -150,7 +129,17 @@ class ScanService:
             vt_malicious = vt_suspicious = vt_harmless = vt_total = 0
             vt_status = "UNKNOWN"
 
-        has_vt = vt_total > 0 and vt_status in {"SAFE", "SUSPICIOUS", "DANGEROUS"}
+        vt_counts_consistent = vt_total > 0 and (vt_malicious + vt_suspicious + vt_harmless) <= vt_total
+        vt_status_consistent = not (
+            (vt_status == "SAFE" and (vt_malicious > 0 or vt_suspicious > 0))
+            or (vt_status == "SUSPICIOUS" and vt_malicious == 0 and vt_suspicious == 0)
+            or (vt_status == "DANGEROUS" and vt_malicious == 0)
+        )
+        has_vt = (
+            vt_counts_consistent
+            and vt_status_consistent
+            and vt_status in {"SAFE", "SUSPICIOUS", "DANGEROUS"}
+        )
 
         ml_class = str(ml_result.get("classification", "UNKNOWN")).upper()
         ml_prob = ml_result.get("phishing_prob")
@@ -165,7 +154,7 @@ class ScanService:
         # ═══════════════════════════════════════════════════════════════════
 
         # Rule 1a: VirusTotal strong consensus (3+ engines flag as malicious)
-        if vt_malicious >= 3:
+        if has_vt and vt_malicious >= 3:
             # Confidence scales with # of engines
             confidence = min(0.99, 0.85 + (vt_malicious - 3) * 0.02)
             return {
@@ -176,7 +165,7 @@ class ScanService:
             }
 
         # Rule 1b: VirusTotal moderate (1-2) + ML corroboration at high confidence
-        if vt_malicious >= 1 and has_ml and ml_class == "DANGEROUS" and ml_prob >= 0.85:
+        if has_vt and vt_malicious >= 1 and has_ml and ml_class == "DANGEROUS" and ml_prob >= 0.85:
             # Two independent signals agree
             confidence = min(0.95, 0.75 + (ml_prob - 0.85) * 1.5)
             return {
@@ -191,7 +180,7 @@ class ScanService:
         # ═══════════════════════════════════════════════════════════════════
 
         # Rule 2a: VirusTotal has malicious OR multiple suspicious signals
-        if vt_malicious >= 1 or vt_suspicious >= 2:
+        if has_vt and (vt_malicious >= 1 or vt_suspicious >= 2):
             return {
                 "classification": "SUSPICIOUS",
                 "confidence": 0.65,
@@ -261,22 +250,20 @@ class ScanService:
             vt_score = min(1.0, (vt_malicious + (vt_suspicious * 0.5)) / max(1.0, vt_total * 0.10))
             score = (0.55 * vt_score) + (0.45 * ml_prob)
 
-            if score >= 0.70:
-                classification = "DANGEROUS"
-            elif score >= 0.40:
-                classification = "SUSPICIOUS"
-            else:
-                classification = "SAFE"
+            # The weighted fallback is not a calibrated proof threshold. It may
+            # only raise caution; DANGEROUS requires the explicit rules above,
+            # and SAFE requires positive agreement from a rule above.
+            classification = "SUSPICIOUS" if score >= 0.40 else "UNKNOWN"
 
             # Confidence reflects the score, but never reaches 0.99 from weighted alone
-            if classification == "SAFE":
-                confidence = max(0.70, 1.0 - score)
+            if classification == "UNKNOWN":
+                confidence = None
             else:
                 confidence = round(min(0.88, 0.60 + score * 0.3), 4)
 
             return {
                 "classification": classification,
-                "confidence": round(confidence, 4),
+                "confidence": round(confidence, 4) if confidence is not None else None,
                 "weighted_score": round(score, 4),
                 "source": "HYBRID_WEIGHTED",
             }
@@ -307,6 +294,37 @@ class ScanService:
             "UNKNOWN": "أعد المحاولة لاحقاً أو تحقق عبر مصدر موثوق." if not english else "Try again later or verify with a trusted source.",
         }.get(classification, "توخ الحذر." if not english else "Exercise caution.")
         return {"summary": text, "reasons": [], "recommendation": recommendation, "provider": "LOCAL_RULES"}
+
+    @classmethod
+    def _local_sms_fallback(cls, text_content: str, extracted_url: str, combined: dict, language: str, provider: str) -> dict:
+        text_result = cls.analyze_text_phishing(text_content, bool(extracted_url))
+        rank = {"SAFE": 0, "UNKNOWN": 1, "SUSPICIOUS": 2, "DANGEROUS": 3}
+        candidates = [text_result.get("classification", "UNKNOWN")]
+        if extracted_url:
+            candidates.append(combined.get("classification", "UNKNOWN"))
+        classification = max(
+            (str(item).upper() for item in candidates if str(item).upper() in rank),
+            key=lambda item: rank[item],
+            default="UNKNOWN",
+        )
+        explanation = cls._local_explanation(classification, language)
+        explanation.update({
+            "classification": classification,
+            "confidence": None,
+            "fraud_probability": None,
+            "urgency_pressure_score": None,
+            "credential_theft_score": None,
+            "identity_spoofing_score": None,
+            "lure_type": "إشارات تستدعي الحذر" if classification == "SUSPICIOUS" and language == "ar" else "Indicators require caution" if classification == "SUSPICIOUS" else "غير محسوم" if language == "ar" else "Inconclusive",
+            "authenticity_status": "غير متحقق" if language == "ar" else "Unverified",
+            "limitations": ["القواعد المحلية لا تثبت سلامة الرسالة أو هوية مرسلها." if language == "ar" else "Local rules cannot verify message safety or sender identity."],
+            "provider": provider,
+        })
+        if text_result.get("indicators"):
+            explanation["reasons"] = [
+                ("إشارات مرصودة: " if language == "ar" else "Observed signals: ") + ", ".join(text_result["indicators"])
+            ]
+        return explanation
 
     @classmethod
     async def process_url_scan(cls, target_url: str, language: str = "ar") -> dict:
@@ -453,15 +471,9 @@ class ScanService:
             ai_enabled = False
             logger.warning("scan_total_deadline_settings")
         if not ai_enabled:
-            local_text = cls.analyze_text_phishing(text_content, bool(extracted_url))
-            fallback_classification = combined["classification"] if extracted_url else local_text["classification"]
-            ai_analysis = {
-                **cls._local_explanation(fallback_classification, language),
-                "classification": fallback_classification,
-                "confidence": local_text.get("confidence") or combined.get("confidence"),
-                "fraud_probability": 0.95 if fallback_classification == "DANGEROUS" else 0.55 if fallback_classification == "SUSPICIOUS" else 0.05,
-                "provider": "LOCAL_FEATURE_DISABLED",
-            }
+            ai_analysis = cls._local_sms_fallback(
+                text_content, extracted_url, combined, language, "LOCAL_FEATURE_DISABLED"
+            )
         else:
             try:
                 ai_analysis = await asyncio.wait_for(
@@ -475,41 +487,44 @@ class ScanService:
                 )
             except asyncio.TimeoutError:
                 logger.warning("sms_gemini_timeout")
-                local_text = cls.analyze_text_phishing(text_content, bool(extracted_url))
-                fallback_classification = combined["classification"] if extracted_url else local_text["classification"]
-                ai_analysis = {
-                    **cls._local_explanation(fallback_classification, language),
-                    "classification": fallback_classification,
-                    "confidence": local_text.get("confidence") or combined.get("confidence"),
-                    "fraud_probability": 0.95 if fallback_classification == "DANGEROUS" else 0.55 if fallback_classification == "SUSPICIOUS" else 0.05,
-                    "provider": "LOCAL_TIMEOUT_FALLBACK",
-                }
+                ai_analysis = cls._local_sms_fallback(
+                    text_content, extracted_url, combined, language, "LOCAL_TIMEOUT_FALLBACK"
+                )
             except Exception:
                 logger.exception("sms_gemini_failed")
-                local_text = cls.analyze_text_phishing(text_content, bool(extracted_url))
-                fallback_classification = combined["classification"] if extracted_url else local_text["classification"]
-                ai_analysis = {
-                    **cls._local_explanation(fallback_classification, language),
-                    "classification": fallback_classification,
-                    "confidence": local_text.get("confidence") or combined.get("confidence"),
-                    "provider": "LOCAL_ERROR_FALLBACK",
-                }
+                ai_analysis = cls._local_sms_fallback(
+                    text_content, extracted_url, combined, language, "LOCAL_ERROR_FALLBACK"
+                )
 
         local_text = cls.analyze_text_phishing(text_content, bool(extracted_url))
-        ai_analysis = cls._enforce_text_safety_floor(combined if extracted_url else local_text, local_text, ai_analysis)
+        ai_class = str(ai_analysis.get("classification", "UNKNOWN")).upper()
+        if ai_class == "SAFE":
+            # Clean text/link signals cannot authenticate the SMS sender or claim.
+            ai_analysis["classification"] = "UNKNOWN"
+            ai_analysis["confidence"] = None
+            ai_analysis["fraud_probability"] = None
+            ai_analysis["authenticity_status"] = "غير متحقق" if language == "ar" else "Unverified"
+            ai_analysis.setdefault("reasons", []).append(
+                "فحص الرابط أو غياب المؤشرات لا يثبت أصالة الرسالة أو هوية مرسلها." if language == "ar" else "A clean link or absent indicators cannot verify the SMS sender or authenticity."
+            )
+            ai_class = "UNKNOWN"
+        if ai_class == "DANGEROUS" and combined.get("classification") != "DANGEROUS":
+            # An LLM-only SMS judgment is insufficient for the highest-severity label.
+            ai_analysis["classification"] = "SUSPICIOUS"
+            ai_analysis["confidence"] = None
+            ai_analysis["fraud_probability"] = None
+            ai_analysis["authenticity_status"] = "غير متحقق" if language == "ar" else "Unverified"
+            ai_analysis.setdefault("reasons", []).append(
+                "لم يُرفع الحكم إلى خطير اعتماداً على Gemini وحده." if language == "ar" else "Gemini alone cannot establish a dangerous verdict."
+            )
+        safety_evidence = combined if extracted_url else local_text
+        if str(safety_evidence.get("classification", "UNKNOWN")).upper() == "SAFE":
+            safety_evidence = {**safety_evidence, "classification": "UNKNOWN", "confidence": None}
+        ai_analysis = cls._enforce_text_safety_floor(safety_evidence, local_text, ai_analysis)
         classification = ai_analysis.get("classification", combined.get("classification", "UNKNOWN"))
-        try:
-            confidence = max(0.0, min(1.0, float(ai_analysis.get("confidence") if ai_analysis.get("confidence") is not None else combined.get("confidence") or 0.0)))
-        except (TypeError, ValueError):
-            confidence = float(combined.get("confidence") or local_text.get("confidence") or 0.0)
-        try:
-            fraud_prob = max(0.0, min(1.0, float(ai_analysis.get("fraud_probability") if ai_analysis.get("fraud_probability") is not None else 0.0)))
-        except (TypeError, ValueError):
-            fraud_prob = 0.0
-        if classification == "DANGEROUS":
-            fraud_prob = max(0.95, fraud_prob)
-        elif classification == "SUSPICIOUS":
-            fraud_prob = max(0.55, fraud_prob)
+        # This SMS task has no independently calibrated probability model.
+        confidence = None
+        fraud_prob = None
 
         explanation = {
             "summary": ai_analysis.get("summary", ""),
@@ -522,11 +537,12 @@ class ScanService:
             "claim_verdict_explanation": ai_analysis.get("claim_verdict_explanation", ""),
             "action_plan_steps": ai_analysis.get("action_plan_steps", []),
             "lure_type": ai_analysis.get("lure_type", "غير محدد"),
-            "authenticity_status": ai_analysis.get("authenticity_status", "UNKNOWN"),
+            "authenticity_status": ai_analysis.get("authenticity_status", "غير متحقق" if language == "ar" else "Unverified"),
+            "limitations": ai_analysis.get("limitations", []),
             "fraud_probability": fraud_prob,
-            "urgency_pressure_score": ai_analysis.get("urgency_pressure_score"),
-            "credential_theft_score": ai_analysis.get("credential_theft_score"),
-            "identity_spoofing_score": ai_analysis.get("identity_spoofing_score"),
+            "urgency_pressure_score": None,
+            "credential_theft_score": None,
+            "identity_spoofing_score": None,
         }
 
         return {

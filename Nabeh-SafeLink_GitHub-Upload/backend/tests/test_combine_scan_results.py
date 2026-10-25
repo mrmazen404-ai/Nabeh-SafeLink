@@ -53,6 +53,33 @@ def test_safe_requires_positive_evidence():
     assert result["classification"] == "SAFE"
     print("✓ VT clean + ML safe → SAFE")
 
+def test_partial_vt_weighted_fallback_cannot_be_dangerous():
+    vt = {"status": "SUSPICIOUS", "malicious": 0, "suspicious": 1, "harmless": 0, "total_engines": 1}
+    # Deliberately inconsistent upstream tuple exercises conservative fusion.
+    ml = {"classification": "SAFE", "phishing_prob": 0.99}
+    result = ScanService.combine_scan_results(vt, ml)
+    assert result["classification"] == "SUSPICIOUS"
+
+def test_unknown_vt_status_cannot_use_orphaned_malicious_counters():
+    vt = {"status": "UNKNOWN", "malicious": 5, "suspicious": 0, "harmless": 0, "total_engines": 0}
+    ml = {"classification": "UNKNOWN", "source": "MODEL_UNAVAILABLE"}
+    result = ScanService.combine_scan_results(vt, ml)
+    assert result["classification"] == "UNKNOWN"
+    assert result["confidence"] is None
+
+def test_inconsistent_vt_counts_cannot_create_consensus_verdict():
+    vt = {"status": "DANGEROUS", "malicious": 5, "suspicious": 0, "harmless": 0, "total_engines": 2}
+    ml = {"classification": "UNKNOWN", "source": "MODEL_UNAVAILABLE"}
+    result = ScanService.combine_scan_results(vt, ml)
+    assert result["classification"] == "UNKNOWN"
+
+def test_weak_weighted_evidence_is_unknown_not_safe():
+    vt = {"status": "SUSPICIOUS", "malicious": 0, "suspicious": 1, "harmless": 0, "total_engines": 100}
+    ml = {"classification": "SAFE", "phishing_prob": 0.10}
+    result = ScanService.combine_scan_results(vt, ml)
+    assert result["classification"] == "UNKNOWN"
+    assert result["confidence"] is None
+
 if __name__ == "__main__":
     test_ml_alone_never_dangerous()
     test_vt_consensus_is_dangerous()

@@ -9,7 +9,6 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
   PinIcon,
-  TargetIcon,
   RefreshIcon,
   ClipboardIcon,
   LinkIcon,
@@ -25,14 +24,14 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
 
   const CONFIG = {
     SAFE: {
-      icon: CheckCircleIcon,
-      labelAr: 'رسالة نصية آمنة',
-      labelEn: 'Safe Text Message',
-      title: lang === 'ar' ? 'رسالة نصية آمنة وموثوقة' : 'Safe & Verified Text Message',
+      icon: HelpCircleIcon,
+      labelAr: 'لم تظهر مؤشرات خطر كافية',
+      labelEn: 'No sufficient risk indicators',
+      title: lang === 'ar' ? 'لم تظهر مؤشرات خطر كافية' : 'No sufficient risk indicators found',
       description: lang === 'ar'
-        ? 'لم يتم العثور على أي أنماط احتيال أو طلبات استدراج مشبوهة أو روابط خبيثة في هذه الرسالة بناءً على التحليل الميداني والبحث المباشر.'
-        : 'No phishing tactics, fraudulent lures, or malicious links detected in this text message.',
-      className: 'safe',
+        ? 'هذه النتيجة لا تثبت أن الرسالة آمنة أو أن مرسلها رسمي؛ تحقّق من الجهة عبر قناة تصل إليها بنفسك.'
+        : 'This does not prove the message is safe or the sender is official; verify through a channel you access independently.',
+      className: 'unknown',
     },
     SUSPICIOUS: {
       icon: AlertTriangleIcon,
@@ -50,8 +49,8 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
       labelEn: 'High Risk Fraudulent SMS',
       title: lang === 'ar' ? 'خطر! رسالة نصية احتيالية (Smishing)' : 'Danger! High Risk Smishing SMS',
       description: lang === 'ar'
-        ? 'تم رصد مؤشرات استدراج احتيالي وانتحال لجهة رسمية/بنكية عبر أبحاث الذكاء الاصطناعي الفورية. لا تنقر على أي رابط ولا تشارك كلمات المرور أو رموز OTP!'
-        : 'High-risk social engineering, bank spoofing, or OTP theft attempt detected. Do not click links or share credentials!',
+        ? 'ظهرت أدلة خطر قوية في التحليل المتاح. لا تفتح الروابط ولا تشارك كلمات المرور أو رموز OTP.'
+        : 'Strong risk evidence was found by the available analysis. Do not click links or share credentials.',
       className: 'dangerous',
     },
     UNKNOWN: {
@@ -68,7 +67,8 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
 
   const config = CONFIG[classification] || CONFIG.UNKNOWN;
   const StatusIcon = config.icon;
-  const fraudProb = Number.isFinite(result?.fraud_probability) ? (result.fraud_probability * 100).toFixed(1) : null;
+  // SMS risk scores are withheld until an independently calibrated SMS model exists.
+  const fraudProb = null;
   const vt = result?.virustotal || {};
   const ml = result?.ml_model || {};
   const exp = result?.explanation || {};
@@ -105,20 +105,6 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
   const suspiciousPct = totalEngines > 0 ? ((vt.suspicious || 0) / totalEngines) * 100 : 0;
   const harmlessPct = totalEngines > 0 ? ((vt.harmless || 0) / totalEngines) * 100 : 0;
 
-  // Social engineering risk indicators derived dynamically from AI research & text NLP analysis (0-100%)
-  const numRisk = Number(fraudProb || 0);
-  const urgencyRisk = typeof exp?.urgency_pressure_score === 'number'
-    ? exp.urgency_pressure_score
-    : (classification === 'DANGEROUS' ? Math.min(100, Math.round(numRisk * 0.95)) : classification === 'SUSPICIOUS' ? Math.round(numRisk * 0.8) : 5);
-
-  const credentialRisk = typeof exp?.credential_theft_score === 'number'
-    ? exp.credential_theft_score
-    : (classification === 'DANGEROUS' ? Math.min(100, Math.round(numRisk * 0.90)) : classification === 'SUSPICIOUS' ? Math.round(numRisk * 0.7) : 2);
-
-  const spoofingRisk = typeof exp?.identity_spoofing_score === 'number'
-    ? exp.identity_spoofing_score
-    : (classification === 'DANGEROUS' ? Math.min(100, Math.round(numRisk * 0.98)) : classification === 'SUSPICIOUS' ? Math.round(numRisk * 0.75) : 1);
-
   const handleCopyReport = () => {
     if (isGuest || !navigator.clipboard?.writeText) return;
     const reportText = `Nabeh SafeLink SMS Smishing Report:\nMessage: ${messageText}\nClassification: ${config.title}\nFraud Risk: ${fraudProb || 'N/A'}%\nClaimed Sender: ${exp.claimed_sender || 'N/A'}\nOfficial Domain: ${exp.official_domain || 'N/A'}\nOfficial Portal: ${officialPortal || 'N/A'}\nRecommendation: ${exp.recommendation || 'تحقق من المصدر الرسمي للرسالة.'}`;
@@ -140,7 +126,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
               <StatusIcon size={32} color="currentColor" />
               <div className="result-badge-labels">
                 <span className="result-badge-ar">{config.labelAr}</span>
-                <span className="result-badge-en">{config.labelEn} • {lang === 'ar' ? 'بحث وتحليل أمان الرسائل المباشر' : 'AI Search Grounded Audit'}</span>
+                <span className="result-badge-en">{config.labelEn} • {lang === 'ar' ? 'مؤشرات متاحة، وليس تحققًا رسميًا' : 'Available signals, not official verification'}</span>
               </div>
             </div>
 
@@ -149,7 +135,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
                 {lang === 'ar' ? 'تحليل أمان الرسائل النصية والهندسة الاجتماعية' : 'SMS TEXT & SOCIAL ENGINEERING AUDIT'}
               </span>
               <span><MailIcon size={14} />{lang === 'ar' ? 'كشف الاستدراج والروابط' : 'Smishing & Lure Audit'}</span>
-              <span><SparklesIcon size={14} />{lang === 'ar' ? 'البحث الحي في الإنترنت Gemini Search' : 'Gemini Search Grounding'}</span>
+              <span><SparklesIcon size={14} />{lang === 'ar' ? 'مصادر خارجية عند توفرها' : 'External sources when available'}</span>
             </div>
 
             {/* Inspected SMS Content Card */}
@@ -199,7 +185,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
               <div className="explanation-header">
                 <h3 className="details-title">
                   <SparklesIcon size={18} color="var(--color-secondary)" />
-                  <span>{lang === 'ar' ? 'تقرير الأبحاث والتحقق الفوري عبر الإنترنت (AI Web Research Agent):' : 'AI Web Research Agent Report:'}</span>
+                  <span>{lang === 'ar' ? 'تفسير النتيجة والأدلة المتاحة:' : 'Result interpretation and available evidence:'}</span>
                 </h3>
                 <span className="gemini-tag">{providerName}</span>
               </div>
@@ -223,7 +209,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: '600' }}>{lang === 'ar' ? 'النطاق والموقع الرسمي المعتمد:' : 'Verified Official Domain:'}</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: '600' }}>{lang === 'ar' ? 'نطاق مرجعي محتمل (لا يثبت هوية المرسل):' : 'Reference domain (does not verify sender):'}</span>
                     <strong dir="ltr" style={{ fontSize: '0.95rem', color: 'var(--color-success)' }}>{exp.official_domain || (lang === 'ar' ? 'غير متاح' : 'N/A')}</strong>
                   </div>
 
@@ -235,50 +221,16 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: '600' }}>{lang === 'ar' ? 'حالة الأصالة والمصداقية:' : 'Authenticity Status:'}</span>
                     <strong style={{ fontSize: '0.95rem', color: classification === 'DANGEROUS' ? 'var(--color-danger)' : classification === 'SUSPICIOUS' ? 'var(--color-warning)' : 'var(--color-success)' }}>
-                      {exp.authenticity_status || (classification === 'DANGEROUS' ? (lang === 'ar' ? 'احتيالية مزيفة (Fake SMS)' : 'Fake Phishing SMS') : classification === 'SUSPICIOUS' ? (lang === 'ar' ? 'غير موثوقة (Unverified)' : 'Unverified SMS') : (lang === 'ar' ? 'رسالة حقيقية ورسمية' : 'Official SMS'))}
+                      {exp.authenticity_status || (lang === 'ar' ? 'لم يتم التحقق من هوية المرسل' : 'Sender identity not verified')}
                     </strong>
                   </div>
                 </div>
               </div>
 
-              {/* Social Engineering Risk Factors Chart */}
-              <div style={{ marginTop: '20px', padding: '16px', borderRadius: '12px', background: 'var(--color-bg-subtle)', border: '1px solid var(--color-border-subtle)' }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: 'var(--color-secondary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <TargetIcon size={16} color="currentColor" />
-                  <span>{lang === 'ar' ? 'تفكيك عوامل الهندسة الاجتماعية والتأثير النفسي:' : 'Social Engineering Risk Factor Breakdown:'}</span>
-                </h4>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
-                      <span>{lang === 'ar' ? 'مؤشر الضغط والاستعجال النفسي (Urgency Pressure)' : 'Urgency Pressure Risk'}</span>
-                      <strong style={{ color: urgencyRisk > 50 ? 'var(--color-danger)' : 'var(--color-success)' }}>{urgencyRisk}%</strong>
-                    </div>
-                    <div className="confidence-bar" style={{ height: '6px' }}>
-                      <div className={`confidence-fill confidence-fill-${urgencyRisk > 50 ? 'dangerous' : 'safe'}`} style={{ width: `${urgencyRisk}%` }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
-                      <span>{lang === 'ar' ? 'مؤشر طلب البيانات الحساسة/OTP (Credential Theft Risk)' : 'Credential & OTP Theft Risk'}</span>
-                      <strong style={{ color: credentialRisk > 50 ? 'var(--color-danger)' : 'var(--color-success)' }}>{credentialRisk}%</strong>
-                    </div>
-                    <div className="confidence-bar" style={{ height: '6px' }}>
-                      <div className={`confidence-fill confidence-fill-${credentialRisk > 50 ? 'dangerous' : 'safe'}`} style={{ width: `${credentialRisk}%` }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
-                      <span>{lang === 'ar' ? 'مؤشر انتحال الشخصية والجهات (Identity Spoofing Risk)' : 'Identity Spoofing Risk'}</span>
-                      <strong style={{ color: spoofingRisk > 50 ? 'var(--color-danger)' : 'var(--color-success)' }}>{spoofingRisk}%</strong>
-                    </div>
-                    <div className="confidence-bar" style={{ height: '6px' }}>
-                      <div className={`confidence-fill confidence-fill-${spoofingRisk > 50 ? 'dangerous' : 'safe'}`} style={{ width: `${spoofingRisk}%` }} />
-                    </div>
-                  </div>
-                </div>
+              <div role="note" style={{ marginTop: '20px', padding: '14px 16px', borderRadius: '12px', background: 'var(--color-bg-subtle)', border: '1px solid var(--color-border-subtle)', color: 'var(--color-text-subtle)', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                {lang === 'ar'
+                  ? 'لا نعرض درجات رقمية للضغط أو سرقة البيانات أو الانتحال قبل معايرتها والتحقق منها على مجموعة مستقلة.'
+                  : 'Numeric urgency, credential-theft, and impersonation scores are withheld until independently validated and calibrated.'}
               </div>
 
               {Array.isArray(exp.reasons) && exp.reasons.length > 0 && (
@@ -311,7 +263,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
                       style={{ padding: '8px 16px', fontSize: '0.85rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                     >
                       <LinkIcon size={14} color="#FFFFFF" />
-                      <span>{lang === 'ar' ? 'الانتقال للموقع الرسمي المعتمد' : 'Visit Verified Official Portal'}</span>
+                      <span>{lang === 'ar' ? 'فتح النطاق المرجعي' : 'Open reference domain'}</span>
                     </a>
                   )}
                 </div>
@@ -341,7 +293,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
               <div className="card details-block" style={{ borderInlineStart: '4px solid var(--color-success)', background: 'var(--color-success-bg)' }}>
                 <h3 className="details-title" style={{ color: 'var(--color-success)', fontSize: '0.95rem' }}>
                   <ShieldCheckIcon size={18} color="currentColor" />
-                  <span>{lang === 'ar' ? 'الموقع البوابة الرسمية المعتمدة:' : 'Verified Official Portal:'}</span>
+                  <span>{lang === 'ar' ? 'نطاق مرجعي محتمل:' : 'Potential reference domain:'}</span>
                 </h3>
                 <div style={{ marginTop: '8px', wordBreak: 'break-all', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--color-success)' }}>
                   <a href={officialPortal.startsWith('http') ? officialPortal : `https://${officialPortal}`} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>
@@ -349,7 +301,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
                   </a>
                 </div>
                 <p style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', marginTop: '6px', margin: 0 }}>
-                  {lang === 'ar' ? 'تصل دائماً للخدمات الرسمية عبر هذا الرابط الموثق بدلاً من الروابط النصية.' : 'Always access official services via this verified link rather than text links.'}
+                  {lang === 'ar' ? 'هذا نطاق مرجعي محفوظ في النظام وليس تحققًا مباشرًا من هوية الرسالة؛ تأكد من العنوان قبل إدخال أي بيانات.' : 'This is a stored reference domain, not live verification of the message. Confirm the address before entering data.'}
                 </p>
               </div>
             )}

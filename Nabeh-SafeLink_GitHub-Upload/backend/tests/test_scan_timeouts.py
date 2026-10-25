@@ -17,7 +17,9 @@ async def test_text_scan_uses_local_fallback_when_ai_times_out(monkeypatch):
 
     result = await service.ScanService.process_text_scan("السلام عليكم", language="ar")
 
-    assert result["classification"] == "SAFE"
+    assert result["classification"] == "UNKNOWN"
+    assert result["confidence"] is None
+    assert result["fraud_probability"] is None
     assert result["source"] == "LOCAL_TIMEOUT_FALLBACK"
     assert result["explanation"]["provider"] == "LOCAL_TIMEOUT_FALLBACK"
 
