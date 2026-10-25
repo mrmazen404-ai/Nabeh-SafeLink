@@ -23,6 +23,136 @@ const STATUS_CFG = {
   UNKNOWN: { icon: HelpCircleIcon, className: 'recent-unknown' },
 };
 
+const API_ERROR_CODE_MAP = {
+  INVALID_INPUT: 'SCAN_E_INPUT',
+  SCAN_INVALID_INPUT: 'SCAN_E_INPUT',
+  AUTH_REQUIRED: 'SCAN_E_AUTH',
+  UNAUTHENTICATED: 'SCAN_E_AUTH',
+  GUEST_SCAN_DISABLED: 'SCAN_E_GUEST_DISABLED',
+  ACCESS_DENIED: 'SCAN_E_ACCESS',
+  RATE_LIMITED: 'SCAN_E_RATE_LIMIT',
+  SCAN_RATE_LIMITED: 'SCAN_E_RATE_LIMIT',
+  SCAN_TIMEOUT: 'SCAN_E_TIMEOUT',
+  SCAN_DEADLINE_EXCEEDED: 'SCAN_E_TIMEOUT',
+  SCAN_PROVIDER_UNAVAILABLE: 'SCAN_E_PROVIDER',
+  UPSTREAM_UNAVAILABLE: 'SCAN_E_PROVIDER',
+  SCAN_SETTINGS_UNAVAILABLE: 'SCAN_E_CONFIGURATION',
+  SCAN_UNAVAILABLE: 'SCAN_E_UNAVAILABLE',
+  INTERNAL_ERROR: 'SCAN_E_INTERNAL',
+};
+
+const SCAN_ERROR_COPY = {
+  SCAN_E_INPUT: {
+    ar: 'تعذر قبول المدخل. تحقق من صيغة الرابط أو من أن نص الرسالة غير فارغ، ثم حاول مجددًا.',
+    en: 'The input could not be accepted. Check the URL format or make sure the message is not empty, then try again.',
+    retryable: false,
+  },
+  SCAN_E_AUTH: {
+    ar: 'انتهت جلسة الدخول أو لم تعد صالحة. سجّل الدخول ثم أعد الفحص.',
+    en: 'Your sign-in session has expired or is no longer valid. Sign in and scan again.',
+    retryable: false,
+  },
+  SCAN_E_GUEST_DISABLED: {
+    ar: 'فحص الضيف متوقف حاليًا. سجّل الدخول لاستخدام الفحص أو حاول لاحقًا.',
+    en: 'Guest scanning is currently disabled. Sign in to scan or try again later.',
+    retryable: false,
+  },
+  SCAN_E_ACCESS: {
+    ar: 'لا تملك الصلاحية اللازمة لإجراء هذا الفحص. تحقق من حالة الدخول أو استخدم حسابًا مخولًا.',
+    en: 'You do not have permission to run this scan. Check your sign-in status or use an authorized account.',
+    retryable: false,
+  },
+  SCAN_E_RATE_LIMIT: {
+    ar: 'وصلت إلى حد الفحوصات المسموح به مؤقتًا.',
+    en: 'The temporary scan request limit has been reached.',
+    retryable: true,
+  },
+  SCAN_E_TIMEOUT: {
+    ar: 'انتهت مهلة الفحص قبل اكتماله. لم نحصل على نتيجة نهائية؛ أعد المحاولة بعد قليل.',
+    en: 'The scan timed out before it completed. No final result was received; try again shortly.',
+    retryable: true,
+  },
+  SCAN_E_PROVIDER: {
+    ar: 'تعذر الحصول على استجابة من إحدى خدمات التحقق. الفحص غير مكتمل؛ لا تعتبر الرابط آمنًا بناءً على هذه المحاولة.',
+    en: 'One of the verification services did not respond. The scan is incomplete; do not treat the link as safe based on this attempt.',
+    retryable: true,
+  },
+  SCAN_E_CONFIGURATION: {
+    ar: 'خدمة الفحص غير مهيأة حاليًا. لم يكتمل التحقق؛ حاول لاحقًا أو تواصل مع الدعم.',
+    en: 'The scanning service is not fully configured. Verification did not complete; try later or contact support.',
+    retryable: false,
+  },
+  SCAN_E_UNAVAILABLE: {
+    ar: 'تعذر إكمال الفحص الآن. لم تصدر نتيجة؛ حاول لاحقًا، ولا تتفاعل مع الرابط حتى تتحقق منه.',
+    en: 'The scan could not be completed right now. No result was produced; try later and avoid interacting with the link until verified.',
+    retryable: true,
+  },
+  SCAN_E_NETWORK: {
+    ar: 'تعذر الاتصال بخدمة الفحص. تحقق من اتصال الإنترنت ثم أعد المحاولة.',
+    en: 'Could not connect to the scanning service. Check your internet connection and try again.',
+    retryable: true,
+  },
+  SCAN_E_INTERNAL: {
+    ar: 'حدث خطأ داخلي ولم يكتمل الفحص. حاول لاحقًا، وإذا تكرر أرسل رمز الخطأ للدعم.',
+    en: 'An internal error prevented the scan from completing. Try later; if it repeats, share the error code with support.',
+    retryable: true,
+  },
+  SCAN_E_GENERIC: {
+    ar: 'لم نتمكن من إكمال الفحص. لم تصدر نتيجة نهائية؛ حاول مرة أخرى لاحقًا.',
+    en: 'We could not complete the scan. No final result was produced; please try again later.',
+    retryable: true,
+  },
+};
+
+function getSafeScanError(error, language) {
+  const isArabic = language === 'ar';
+  const status = error?.response?.status;
+  const responseBody = error?.response?.data;
+  const rawCode = responseBody?.error?.code || responseBody?.code || responseBody?.error_code;
+  const normalizedCode = typeof rawCode === 'string' ? API_ERROR_CODE_MAP[rawCode] : null;
+  const retryHeader = error?.response?.headers?.['retry-after'] || error?.response?.headers?.get?.('retry-after');
+  const retryHeaderText = String(retryHeader || '');
+  const parsedRetryDate = Date.parse(retryHeaderText);
+  const retrySeconds = /^\d+$/.test(retryHeaderText)
+    ? Math.min(3600, Number(retryHeaderText))
+    : Number.isFinite(parsedRetryDate)
+      ? Math.min(3600, Math.max(0, Math.ceil((parsedRetryDate - Date.now()) / 1000)))
+      : null;
+
+  let code = normalizedCode;
+  if (!error) code = 'SCAN_E_GENERIC';
+  if (error && !code) {
+    if (error?.code === 'ECONNABORTED' || status === 408 || status === 504) code = 'SCAN_E_TIMEOUT';
+    else if (status === 400 || status === 422) code = 'SCAN_E_INPUT';
+    else if (status === 401) code = 'SCAN_E_AUTH';
+    else if (status === 403) code = 'SCAN_E_ACCESS';
+    else if (status === 429) code = 'SCAN_E_RATE_LIMIT';
+    else if (status === 502) code = 'SCAN_E_PROVIDER';
+    else if (status === 503) code = 'SCAN_E_UNAVAILABLE';
+    else if (typeof status === 'number' && status >= 500) code = 'SCAN_E_INTERNAL';
+    else if (!error?.response) code = 'SCAN_E_NETWORK';
+    else code = 'SCAN_E_GENERIC';
+  }
+
+  const copy = SCAN_ERROR_COPY[code] || SCAN_ERROR_COPY.SCAN_E_GENERIC;
+  const message = code === 'SCAN_E_RATE_LIMIT' && retrySeconds !== null
+    ? (isArabic
+      ? `${copy.ar} أعد المحاولة بعد ${retrySeconds} ثانية.`
+      : `${copy.en} Retry in ${retrySeconds} seconds.`)
+    : copy[isArabic ? 'ar' : 'en'];
+  const requestId = responseBody?.error?.request_id || responseBody?.request_id || error?.response?.headers?.['x-request-id'];
+  const safeRequestId = typeof requestId === 'string' && /^[A-Za-z0-9_-]{6,64}$/.test(requestId)
+    ? requestId
+    : null;
+
+  return {
+    code,
+    message,
+    retryable: copy.retryable && (code !== 'SCAN_E_RATE_LIMIT' || retrySeconds === null || retrySeconds === 0),
+    requestId: safeRequestId,
+  };
+}
+
 export default function Scanner({ initialUrl = '', onClearInitial, activeTab, setActiveTab, isGuest = true, onNavigateAuth }) {
   const { t, lang, dir } = useLanguage();
   const [url, setUrl] = useState(initialUrl);
@@ -78,22 +208,10 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
         setResult(response.data);
         if (!isGuest) fetchScans();
       } else {
-        setError(t('scanner.errScanFailed'));
+        setError(getSafeScanError(null, lang));
       }
     } catch (err) {
-      const status = err?.response?.status;
-      const message = err?.code === 'ECONNABORTED'
-        ? (lang === 'ar' ? 'استغرق الفحص وقتًا أطول من المتوقع. أعد المحاولة بعد لحظات.' : 'The scan took longer than expected. Please try again shortly.')
-        : status === 400 || status === 422
-          ? (lang === 'ar' ? 'تحقق من البيانات المدخلة ثم حاول مرة أخرى.' : 'Please check the entered content and try again.')
-          : status === 401
-            ? (lang === 'ar' ? 'انتهت جلستك. سجّل الدخول ثم أعد المحاولة.' : 'Your session has expired. Please sign in and try again.')
-            : status === 429
-              ? (lang === 'ar' ? 'تم الوصول إلى حد الفحوصات مؤقتًا. أعد المحاولة لاحقًا.' : 'The scan limit was reached temporarily. Please try again later.')
-              : status >= 500
-                ? (lang === 'ar' ? 'خدمة الفحص غير متاحة مؤقتًا. حاول مرة أخرى بعد قليل.' : 'The scanning service is temporarily unavailable. Please try again shortly.')
-                : t('scanner.errServerConnection');
-      setError(message);
+      setError(getSafeScanError(err, lang));
     } finally {
       setLoading(false);
     }
@@ -242,9 +360,26 @@ export default function Scanner({ initialUrl = '', onClearInitial, activeTab, se
               </div>
 
               {error && (
-                <div className="scanner-error">
+                <div className="scanner-error" role="alert" aria-live="polite">
                   <AlertTriangleIcon size={16} color="var(--color-danger)" />
-                  <span>{error}</span>
+                  <span>
+                    {typeof error === 'string' ? error : (
+                      <>
+                        {error.message}
+                        {error.requestId && <small> {lang === 'ar' ? 'مرجع الدعم:' : 'Support reference:'} {error.requestId}</small>}
+                        <small> {lang === 'ar' ? 'رمز الخطأ:' : 'Error code:'} {error.code}</small>
+                        {error.retryable && (
+                          <button
+                            type="button"
+                            onClick={() => handleScan()}
+                            style={{ marginInlineStart: 10, border: 0, padding: 0, background: 'transparent', color: 'var(--color-primary)', cursor: 'pointer', font: 'inherit', textDecoration: 'underline' }}
+                          >
+                            {lang === 'ar' ? 'إعادة المحاولة' : 'Try again'}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </span>
                 </div>
               )}
 
