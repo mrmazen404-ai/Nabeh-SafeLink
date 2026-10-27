@@ -170,3 +170,66 @@ def test_text_scan_timeout_does_not_mark_greeting_safe(monkeypatch):
     result = asyncio.run(ScanService.process_text_scan("السلام عليكم", language="ar"))
     assert result["classification"] == "UNKNOWN"
     assert result["fraud_probability"] is None
+
+
+def test_gemini_429_stops_model_cascade_and_uses_local_fallback(monkeypatch):
+    from app.gemini import client as gemini_client
+
+    class RateLimitedError(Exception):
+        status_code = 429
+
+    class Models:
+        def __init__(self):
+            self.calls = 0
+
+        async def generate_content(self, **_kwargs):
+            self.calls += 1
+            raise RateLimitedError("rate limited")
+
+    models = Models()
+    fake_client = SimpleNamespace(aio=SimpleNamespace(models=models))
+    monkeypatch.setattr(gemini_client, "_get_api_key", lambda: "test-key")
+    monkeypatch.setattr(gemini_client, "_get_client", lambda: fake_client)
+
+    result = asyncio.run(gemini_client.analyze_sms_message("السلام عليكم", language="ar"))
+
+    assert models.calls == 1
+    assert result["provider"] == "LOCAL_AI_RULES"
+    assert result["classification"] == "UNKNOWN"
+
+
+def test_gemini_explanations_with_uncalibrated_percentages_use_fallback():
+    from app.gemini.schemas import validate_gemini_payload, validate_gemini_sms_payload
+
+    fallback = {
+        "classification": "UNKNOWN",
+        "summary": "الأدلة المتاحة غير كافية لتحديد الحالة.",
+        "reasons": [],
+        "recommendation": "تحقق من الجهة عبر قناة مستقلة.",
+        "limitations": [],
+    }
+    url_result = validate_gemini_payload(
+        {"summary": "الرابط آمن بنسبة 99%", "recommendation": "تابع الاستخدام", "reasons": []},
+        fallback=fallback,
+    )
+    sms_result = validate_gemini_sms_payload(
+        {
+            "classification": "SAFE",
+            "summary": "الرسالة موثوقة بنسبة 95%",
+            "recommendation": "تابع الاستخدام",
+            "reasons": [],
+        },
+        fallback=fallback,
+    )
+
+    assert url_result["summary"] == fallback["summary"]
+    assert sms_result["summary"] == fallback["summary"]
+    assert sms_result["classification"] == "UNKNOWN"
+
+
+def test_url_gemini_system_instruction_marks_input_as_untrusted():
+    from app.gemini.client import SYSTEM_INSTRUCTION
+
+    assert "untrusted data" in SYSTEM_INSTRUCTION.lower()
+    assert "never instructions" in SYSTEM_INSTRUCTION.lower()
+from types import SimpleNamespace

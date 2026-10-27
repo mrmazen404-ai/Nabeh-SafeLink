@@ -64,7 +64,12 @@ return {current, ttl}
 
     @property
     def configured(self) -> bool:
-        return bool(self.url and self.token)
+        if not (self.url and self.token):
+            return False
+        if os.getenv("NABEH_ENVIRONMENT", "development").lower() in {"production", "staging"}:
+            salt = os.getenv("NABEH_RATE_LIMIT_SALT", "")
+            return self.fail_closed and len(salt) >= 32
+        return True
 
     async def check(self, identity: str) -> RateLimitDecision:
         started = time.perf_counter()
@@ -117,7 +122,10 @@ return {current, ttl}
     @staticmethod
     def _hash_identity(identity: str) -> str:
         # Never place a raw IP address in Redis keys or logs.
-        salt = os.getenv("NABEH_RATE_LIMIT_SALT", "development-only-change-me").encode()
+        salt_value = os.getenv("NABEH_RATE_LIMIT_SALT", "")
+        if os.getenv("NABEH_ENVIRONMENT", "development").lower() in {"production", "staging"} and len(salt_value) < 32:
+            raise RuntimeError("NABEH_RATE_LIMIT_SALT is required for production rate limiting")
+        salt = (salt_value or "development-only-change-me").encode()
         return hmac.new(salt, identity.encode("utf-8", "ignore"), hashlib.sha256).hexdigest()[:32]
 
 

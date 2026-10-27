@@ -52,7 +52,9 @@ export default function Comparison({ activeTab, setActiveTab, onNavigateAuth }) 
     ? comparison
     : scans.filter((scan) => selected.includes(scan.id)).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
-  const getClassLabel = (cls) => t(`scanDetails.labels.${cls}`) || cls || t('scanDetails.labels.UNKNOWN');
+  const getClassLabel = (cls) => cls === 'SAFE'
+    ? (lang === 'ar' ? 'لم تُرصد مؤشرات' : 'No indicators detected')
+    : t(`scanDetails.labels.${cls}`) || cls || t('scanDetails.labels.UNKNOWN');
 
   return (
     <div className="advanced-page" dir={dir}>
@@ -109,7 +111,7 @@ export default function Comparison({ activeTab, setActiveTab, onNavigateAuth }) 
                   <span className="advanced-kicker">{t('comparison.resultsKicker')}</span>
                   <h2>{t('comparison.trendTitle')}</h2>
                 </div>
-                <span className="comparison-trend">{getTrendLabel(rows, t)}</span>
+                <span className="comparison-trend">{lang === 'ar' ? 'درجات الثقة غير متاحة قبل المعايرة المستقلة' : 'Confidence scores are withheld pending independent calibration'}</span>
               </div>
 
               <div className="comparison-table">
@@ -127,7 +129,7 @@ export default function Comparison({ activeTab, setActiveTab, onNavigateAuth }) 
                     <span className={`result-tag ${String(scan.classification).toLowerCase()}`}>
                       {getClassLabel(scan.classification)}
                     </span>
-                    <span>{scan.confidence_score == null ? '—' : `${(scan.confidence_score * 100).toFixed(1)}%`}</span>
+                    <span>{lang === 'ar' ? 'غير متاحة' : 'Not available'}</span>
                     <span>{formatDate(scan.created_at, lang)}</span>
                   </div>
                 ))}
@@ -137,7 +139,7 @@ export default function Comparison({ activeTab, setActiveTab, onNavigateAuth }) 
             <section className="advanced-grid">
               <article className="advanced-card">
                 <h2>{t('comparison.insightTitle')}</h2>
-                <p className="explanation-copy">{getComparisonInsight(rows, t)}</p>
+                <p className="explanation-copy">{getComparisonInsight(rows, t, lang)}</p>
               </article>
               <article className="advanced-card">
                 <h2>{t('comparison.methodologyTitle')}</h2>
@@ -158,16 +160,16 @@ function formatDate(value, lang = 'ar') {
     : '—';
 }
 
-function getTrendLabel(rows, t) {
-  const first = Number(rows[0]?.confidence_score || 0);
-  const last = Number(rows[rows.length - 1]?.confidence_score || 0);
-  return last > first ? t('comparison.trendUp') : last < first ? t('comparison.trendDown') : t('comparison.trendStable');
-}
-
-function getComparisonInsight(rows, t) {
+function getComparisonInsight(rows, t, lang) {
   const dangerous = rows.filter((row) => row.classification === 'DANGEROUS').length;
   if (dangerous) {
     return t('comparison.insightDangerous', { count: dangerous });
   }
-  return t('comparison.insightSafe');
+  if (rows.some((row) => row.classification === 'SUSPICIOUS')) {
+    return lang === 'ar' ? 'تتضمن المقارنة نتائج تستدعي الحذر؛ تحقّق من كل نتيجة على حدة.' : 'Some compared scans warrant caution; review each result individually.';
+  }
+  if (rows.every((row) => row.classification === 'SAFE')) {
+    return lang === 'ar' ? 'لم تُرصد مؤشرات في هذه النتائج، لكن ذلك لا يثبت السلامة.' : 'No indicators were recorded in these results; this does not prove safety.';
+  }
+  return lang === 'ar' ? 'تتضمن المقارنة نتائج غير حاسمة؛ لا تتعامل معها كأنها آمنة.' : 'Some results are inconclusive; do not treat them as safe.';
 }

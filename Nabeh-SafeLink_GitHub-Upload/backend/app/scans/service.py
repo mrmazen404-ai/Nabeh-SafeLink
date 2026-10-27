@@ -36,15 +36,15 @@ class ScanService:
         if not text:
             return ""
         # 1. Match explicit scheme or www. prefix
-        explicit_match = re.search(r"(?:https?://|www\.)[^\s,;\"'<>()]+", text, re.IGNORECASE)
+        explicit_match = re.search(r"(?:https?://|www\.)[^\s,;،؛؟۔\"'<>()]+", text, re.IGNORECASE)
         if explicit_match:
             return explicit_match.group(0).rstrip(".,;:!?'\")")
 
-        # 2. Match naked domains with standard high-use TLDs
+        # 2. Match naked domains without a hand-maintained TLD allowlist.
         tld_pattern = (
             r"\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+"
-            r"(?:com|sa|org|net|info|gov|edu|biz|xyz|top|site|online|store|shop|me|co|io|app|ai|vip|tech|live|cc|tv|so|link|page|cloud|click)"
-            r"(?:/[^\s,;\"'<>()]*)?"
+            r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+            r"(?:/[^\s,;،؛؟۔\"'<>()]*)?"
         )
         naked_match = re.search(tld_pattern, text, re.IGNORECASE)
         if naked_match:
@@ -223,26 +223,6 @@ class ScanService:
                 "source": "HYBRID_CONSENSUS_SAFE",
             }
 
-        # Rule 3b: VT clean + ML unknown → SAFE (VT is authoritative)
-        if has_vt and vt_status == "SAFE" and vt_harmless > 0 and vt_malicious == 0 and vt_suspicious == 0:
-            confidence = float(vt_result.get("confidence") or 0.85)
-            return {
-                "classification": "SAFE",
-                "confidence": round(confidence, 4),
-                "weighted_score": None,
-                "source": "VIRUSTOTAL_CLEAN",
-            }
-
-        # Rule 3c: ML safe + VT unknown → SAFE (ML alone is OK for SAFE, but with lower confidence)
-        if has_ml and ml_class == "SAFE" and not has_vt:
-            confidence = min(0.80, 1.0 - ml_prob)  # Cap at 0.80 for ML-only SAFE
-            return {
-                "classification": "SAFE",
-                "confidence": round(confidence, 4),
-                "weighted_score": round(ml_prob, 4),
-                "source": "ML_SAFE_ONLY",
-            }
-
         # ═══════════════════════════════════════════════════════════════════
         # TIER 4: Hybrid weighted score (fallback for edge cases)
         # ═══════════════════════════════════════════════════════════════════
@@ -384,14 +364,14 @@ class ScanService:
             "input_value": target_url,
             "extracted_url": target_url,
             "classification": combined["classification"],
-            "confidence": combined.get("confidence"),
+            "confidence": None,
             "source": combined["source"],
             "stages": {
                 "stage1_ml": {
                     "name": "Stage 1: LightGBM ML Model Analysis",
                     "classification": ml_result.get("classification", "UNKNOWN"),
-                    "confidence": ml_result.get("confidence"),
-                    "phishing_prob": ml_result.get("phishing_prob"),
+                    "confidence": None,
+                    "phishing_prob": None,
                     "source": ml_result.get("source", "N/A"),
                 },
                 "stage2_virustotal": {
@@ -413,8 +393,8 @@ class ScanService:
             "virustotal": vt_result,
             "ml_model": {
                 "classification": ml_result.get("classification", "UNKNOWN"),
-                "confidence": ml_result.get("confidence"),
-                "phishing_prob": ml_result.get("phishing_prob"),
+                "confidence": None,
+                "phishing_prob": None,
                 "source": ml_result.get("source", "N/A"),
             },
         }
@@ -575,7 +555,7 @@ class ScanService:
                     "malicious": vt_result.get("malicious", 0),
                     "suspicious": vt_result.get("suspicious", 0),
                     "total_engines": vt_result.get("total_engines", 0),
-                    "ml_phishing_prob": ml_result.get("phishing_prob"),
+                    "ml_phishing_prob": None,
                 },
                 "stage3_gemini_sms": {
                     "name": "Stage 3: Gemini AI Smishing Threat Research",
@@ -588,8 +568,8 @@ class ScanService:
             "virustotal": vt_result,
             "ml_model": {
                 "classification": ml_result.get("classification", "UNKNOWN"),
-                "confidence": ml_result.get("confidence"),
-                "phishing_prob": ml_result.get("phishing_prob"),
+                "confidence": None,
+                "phishing_prob": None,
                 "source": ml_result.get("source", "N/A"),
             },
         }
@@ -651,8 +631,8 @@ class ScanService:
                 "input_value_masked": cls._mask_input(input_type, raw_input),
                 "status": "COMPLETED",
                 "classification": scan_res["classification"],
-                "confidence_score": float(scan_res.get("confidence") or 0.0),
-                "confidence_level": "HIGH" if (scan_res.get("confidence") or 0) >= 0.8 else "MEDIUM",
+                "confidence_score": None,
+                "confidence_level": None,
                 "recommendation": scan_res.get("explanation", {}).get("recommendation", ""),
                 "completed_at": now_iso,
             }
@@ -749,7 +729,11 @@ class ScanService:
                 .limit(safe_limit)
                 .execute()
             )
-            return result.data or []
+            rows = result.data or []
+            for row in rows:
+                row["confidence_score"] = None
+                row["confidence_level"] = None
+            return rows
         except Exception:
             logger.error("scan_history_query_failed")
             raise

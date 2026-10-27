@@ -1,5 +1,8 @@
 from datetime import datetime, timezone
+import ipaddress
+import re
 from typing import Literal, Optional
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -52,7 +55,49 @@ def _validate_input(request: ScanRequest) -> str:
     value = request.input_value.strip()
     if not value:
         raise HTTPException(status_code=400, detail="المدخل مطلوب")
+    if request.input_type == "URL":
+        candidate = ScanService.extract_url_from_text(value) or value
+        explicit_scheme = re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", candidate)
+        has_http_scheme = candidate.lower().startswith(("http://", "https://"))
+        host_with_port = re.match(r"^(?:\[[0-9a-f:.]+\]|[^:/\s]+):\d+(?:[/?#]|$)", candidate, re.IGNORECASE)
+        if explicit_scheme and not has_http_scheme and not host_with_port:
+            raise HTTPException(status_code=422, detail="أدخل رابط ويب صالحاً يستخدم HTTP أو HTTPS")
+        if any(ord(char) <= 0x20 or ord(char) == 0x7f for char in candidate) or "\\" in candidate:
+            raise HTTPException(status_code=422, detail="أدخل رابط ويب صالحاً يستخدم HTTP أو HTTPS")
+        normalized = candidate if has_http_scheme else f"https://{candidate}"
+        try:
+            parsed = urlsplit(normalized)
+            host = parsed.hostname or ""
+            _ = parsed.port
+        except ValueError:
+            # Invalid ports and malformed URL literals are rejected before providers run.
+            raise HTTPException(status_code=422, detail="أدخل رابط ويب صالحاً يستخدم HTTP أو HTTPS") from None
+        try:
+            ipaddress.ip_address(host)
+            host_is_ip = True
+        except ValueError:
+            host_is_ip = False
+        if parsed.scheme.lower() not in {"http", "https"} or not host or not (host_is_ip or host.lower() == "localhost" or "." in host):
+            raise HTTPException(status_code=422, detail="أدخل رابط ويب صالحاً يستخدم HTTP أو HTTPS")
     return value
+
+
+_UNCALIBRATED_SCORE_FIELDS = {
+    "confidence", "confidence_score", "confidence_level", "phishing_prob",
+    "ml_phishing_prob", "fraud_probability", "weighted_score",
+    "urgency_pressure_score", "credential_theft_score", "identity_spoofing_score",
+}
+
+
+def _redact_uncalibrated_scores(value):
+    if isinstance(value, list):
+        return [_redact_uncalibrated_scores(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    return {
+        key: None if key in _UNCALIBRATED_SCORE_FIELDS else _redact_uncalibrated_scores(item)
+        for key, item in value.items()
+    }
 
 
 @router.post("/guest")
@@ -114,7 +159,7 @@ async def get_scans(
         scans = await ScanService.get_recent_scans(limit=50, user_id=user_id)
     except Exception:
         raise HTTPException(status_code=503, detail="تعذر تحميل سجل الفحوصات") from None
-    return {"success": True, "data": scans}
+    return {"success": True, "data": _redact_uncalibrated_scores(scans)}
 
 
 @router.post("/{scan_id}/hide")
@@ -194,7 +239,7 @@ async def compare_scans(
         raise HTTPException(status_code=503, detail="تعذر تحميل بيانات المقارنة") from None
     if len(result.data or []) < 2:
         raise HTTPException(status_code=404, detail="لم يتم العثور على فحوصات كافية تخص حسابك")
-    return {"success": True, "data": result.data}
+    return {"success": True, "data": _redact_uncalibrated_scores(result.data or [])}
 
 
 @router.get("/{scan_id}")
@@ -219,7 +264,8 @@ async def get_scan_details(
         explanation = supabase.table("scan_explanations").select(
             "id,language,summary,reasons,recommendation,provider,created_at"
         ).eq("scan_id", scan_id).order("created_at", desc=True).limit(1).execute()
-        return {"success": True, "data": {"scan": result.data[0], "explanation": (explanation.data or [None])[0]}}
+        safe_scan = _redact_uncalibrated_scores(result.data[0])
+        return {"success": True, "data": {"scan": safe_scan, "explanation": (explanation.data or [None])[0]}}
     except HTTPException:
         raise
     except Exception:

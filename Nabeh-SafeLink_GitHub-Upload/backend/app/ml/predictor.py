@@ -67,7 +67,9 @@ def normalize_url(value: str) -> str:
 
 def parse_url(raw_url: str):
     url = normalize_url(raw_url)
-    candidate = url if "://" in url else "http://" + url
+    structural_url = str(raw_url).strip().lower()
+    structural_url = re.sub(r"\s+", "", structural_url)
+    candidate = structural_url if "://" in structural_url else "http://" + structural_url
 
     try:
         parsed = urlsplit(candidate)
@@ -76,7 +78,7 @@ def parse_url(raw_url: str):
         try:
             port = parsed.port
         except ValueError:
-            port = None
+            return url, None, "", None
         return url, parsed, hostname, port
     except Exception:
         return url, None, "", None
@@ -100,9 +102,11 @@ def extract_features(raw_url: str) -> dict:
         host = parsed.hostname or ""
 
     host = host.lower()
-    path = parsed.path or ""
-    query = parsed.query or ""
-    fragment = parsed.fragment or ""
+    # Decode values only after structural parsing so encoded separators cannot
+    # create query/fragment boundaries that were absent in the original URL.
+    path = unquote(parsed.path or "").lower()
+    query = unquote(parsed.query or "").lower()
+    fragment = unquote(parsed.fragment or "").lower()
     scheme = parsed.scheme.lower()
 
     ext = _TLD_EXTRACTOR(host)
@@ -222,6 +226,12 @@ def predict_url(url: str) -> dict:
             "classification": "UNKNOWN",
             "confidence": 0.5,
             "source": "INVALID_URL",
+        }
+    if re.search(r"%(?:2f|3f|23|40|3a)", raw_value, re.IGNORECASE):
+        return {
+            "classification": "UNKNOWN",
+            "confidence": None,
+            "source": "AMBIGUOUS_URL_ENCODING",
         }
     explicit_scheme = re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", raw_value)
     if explicit_scheme and not raw_value.lower().startswith(("http://", "https://")):

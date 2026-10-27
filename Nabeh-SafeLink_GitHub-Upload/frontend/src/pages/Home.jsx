@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import { getStatistics, getScans } from '../services/api';
-import { SearchIcon, AlertTriangleIcon, CheckCircleIcon, XCircleIcon } from '../components/Icons';
+import { SearchIcon, AlertTriangleIcon, CheckCircleIcon, XCircleIcon, HelpCircleIcon } from '../components/Icons';
 
 export default function Home({ onNavigate, onQuickScan, activeTab, setActiveTab, onNavigateAuth }) {
   const [stats, setStats] = useState(null);
@@ -114,9 +114,10 @@ export default function Home({ onNavigate, onQuickScan, activeTab, setActiveTab,
             {!loading && recentScans.length === 0 && !error && <div>لا توجد فحوصات محفوظة بعد.</div>}
             {recentScans.map((scan, idx) => {
               const isSafe = scan.classification === 'SAFE';
+              const isSuspicious = scan.classification === 'SUSPICIOUS';
               const isDangerous = scan.classification === 'DANGEROUS';
-              const color = isSafe ? 'var(--color-success)' : isDangerous ? 'var(--color-danger)' : 'var(--color-warning)';
-              const bg = isSafe ? 'var(--color-success-bg)' : isDangerous ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)';
+              const color = isSafe ? 'var(--color-success)' : isDangerous ? 'var(--color-danger)' : isSuspicious ? 'var(--color-warning)' : 'var(--color-text-muted)';
+              const bg = isSafe ? 'var(--color-success-bg)' : isDangerous ? 'var(--color-danger-bg)' : isSuspicious ? 'var(--color-warning-bg)' : 'var(--color-bg-subtle)';
               const displayVal = scan.input_value_masked || scan.url || 'رابط مفحوص';
 
               return (
@@ -147,7 +148,7 @@ export default function Home({ onNavigate, onQuickScan, activeTab, setActiveTab,
                       flexShrink: 0,
                     }}
                   >
-                    {isSafe ? <CheckCircleIcon size={18} color={color} /> : <AlertTriangleIcon size={18} color={color} />}
+                    {isSafe ? <CheckCircleIcon size={18} color={color} /> : isDangerous || isSuspicious ? <AlertTriangleIcon size={18} color={color} /> : <HelpCircleIcon size={18} color={color} />}
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
@@ -155,7 +156,7 @@ export default function Home({ onNavigate, onQuickScan, activeTab, setActiveTab,
                       {displayVal}
                     </span>
                     <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                      {isSafe ? 'آمن' : isDangerous ? 'خطر' : 'مشبوه'} • {scan.created_at || 'مؤخراً'}
+                      {isSafe ? 'لم تُرصد مؤشرات' : isDangerous ? 'خطر' : isSuspicious ? 'مشبوه' : 'غير محدد'} • {scan.created_at || 'مؤخراً'}
                     </span>
                   </div>
 

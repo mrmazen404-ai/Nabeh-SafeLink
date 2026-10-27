@@ -25,12 +25,12 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
   const CONFIG = {
     SAFE: {
       icon: CheckCircleIcon,
-      labelAr: 'رابط آمن وموثوق',
-      labelEn: 'Safe & Verified URL',
-      title: lang === 'ar' ? 'الرابط آمن وموثوق' : 'Safe & Verified Link',
+      labelAr: 'لم تُرصد مؤشرات تهديد',
+      labelEn: 'No threat indicators detected',
+      title: lang === 'ar' ? 'لم تُرصد مؤشرات تهديد في الفحوصات المتاحة' : 'No threat indicators detected in available checks',
       description: lang === 'ar'
-        ? 'ينتمي هذا الرابط إلى نطاق معتمد ولم تُسجل أي مؤشرات تهديد سيبراني أو برمجيات خبيثة عبر محركات الفحص العالمية.'
-        : 'This URL belongs to a trusted domain with no malware or phishing threat indicators detected.',
+        ? 'هذه النتيجة لا تثبت أن الرابط آمن. لم تُرصد مؤشرات تهديد في المصادر التي استجابت لهذا الفحص؛ تحقّق من الجهة قبل المتابعة.'
+        : 'This result does not prove the URL is safe. No threat indicators were detected by the sources that responded; verify the destination before proceeding.',
       className: 'safe',
     },
     SUSPICIOUS: {
@@ -67,23 +67,27 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
 
   const config = CONFIG[classification] || CONFIG.UNKNOWN;
   const StatusIcon = config.icon;
-  const confidence = Number.isFinite(result?.confidence) ? (result.confidence * 100).toFixed(1) : null;
+  const confidence = result?.confidence_calibrated === true && Number.isFinite(result?.confidence)
+    ? (result.confidence * 100).toFixed(1)
+    : null;
   const vt = result?.virustotal || {};
   const ml = result?.ml_model || {};
   const exp = result?.explanation || {};
   const targetUrl = result?.extracted_url || result?.input_value || '';
   const mlSource = String(ml.source || '').toUpperCase();
-  const hasUsableMlResult = Number.isFinite(ml.phishing_prob)
+  const hasUsableMlResult = Boolean(ml.classification)
     && !['ML_ERROR', 'MODEL_UNAVAILABLE'].includes(mlSource);
 
   const totalEngines = vt.total_engines || 0;
+  const geminiProvider = String(exp.provider || result?.stages?.stage3_gemini?.provider || '').toUpperCase();
+  const usesGemini = geminiProvider.includes('GEMINI');
   const maliciousPct = totalEngines > 0 ? ((vt.malicious || 0) / totalEngines) * 100 : 0;
   const suspiciousPct = totalEngines > 0 ? ((vt.suspicious || 0) / totalEngines) * 100 : 0;
   const harmlessPct = totalEngines > 0 ? ((vt.harmless || 0) / totalEngines) * 100 : 0;
 
   const handleCopyReport = () => {
     if (isGuest || !navigator.clipboard?.writeText) return;
-    const reportText = `Nabeh SafeLink URL Audit Report:\nURL: ${targetUrl}\nClassification: ${config.title}\nConfidence: ${confidence || 'N/A'}%\nRecommendation: ${exp.recommendation || t('result.defaultRec')}`;
+    const reportText = `Nabeh SafeLink URL Audit Report:\nURL: ${targetUrl}\nClassification: ${config.title}\nRecommendation: ${exp.recommendation || t('result.defaultRec')}`;
     navigator.clipboard.writeText(reportText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -91,17 +95,16 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
 
   const sourceLabel = (() => {
     const source = String(result?.source || '').toUpperCase();
-    if (source === 'VERIFIED_SAFE_DOMAIN') return lang === 'ar' ? 'نطاق موثوق' : 'Trusted domain';
     if (source === 'INSUFFICIENT_EVIDENCE') return lang === 'ar' ? 'أدلة غير حاسمة' : 'Inconclusive evidence';
     if (source.startsWith('ML_')) return lang === 'ar' ? 'تحليل أمني متاح' : 'Available security analysis';
     if (source.includes('VIRUSTOTAL') || source.includes('HYBRID')) return lang === 'ar' ? 'تحليل متعدد المصادر' : 'Multi-source analysis';
-    return t('result.hybridSource');
+    return lang === 'ar' ? 'نتيجة الفحص' : 'Scan result';
   })();
 
   const providerLabel = (() => {
     const provider = String(exp.provider || '').toUpperCase();
     if (provider.includes('LOCAL') || provider.includes('FALLBACK') || provider.includes('RULES')) {
-      return lang === 'ar' ? 'تحليل أمني احتياطي' : 'Safe fallback analysis';
+      return lang === 'ar' ? 'تحليل محلي احتياطي' : 'Local fallback analysis';
     }
     if (provider.includes('GEMINI')) return t('result.aiModelTag');
     return lang === 'ar' ? 'تحليل أمني' : 'Security analysis';
@@ -128,8 +131,12 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
               <span className="result-trust-title">
                 {lang === 'ar' ? 'فحص ودراسة أمان الرابط (URL Link Audit)' : 'URL LINK SECURITY AUDIT'}
               </span>
-              <span><ShieldCheckIcon size={14} />{lang === 'ar' ? 'تحليل هيكلي ومحركات متعددة' : 'Multi-engine analysis'}</span>
-              <span><SparklesIcon size={14} />{lang === 'ar' ? 'مدعوم بـ Google Gemini AI' : 'Google Gemini AI'}</span>
+              {hasUsableMlResult && <span><CpuIcon size={14} />LightGBM</span>}
+              {totalEngines > 0 && <span><ShieldCheckIcon size={14} />VirusTotal</span>}
+              {usesGemini && <span><SparklesIcon size={14} />Google Gemini</span>}
+              {!hasUsableMlResult && totalEngines <= 0 && !usesGemini && (
+                <span>{lang === 'ar' ? 'لم تتوفر مصادر فحص كافية' : 'No analysis source returned a result'}</span>
+              )}
             </div>
 
             {/* Inspected URL Box */}
@@ -165,7 +172,7 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
                 <div className="explanation-header">
                   <h3 className="details-title">
                     <SparklesIcon size={18} color="var(--color-secondary)" />
-                    <span>{lang === 'ar' ? 'تقرير الذكاء الاصطناعي والأبحاث الميدانية (Gemini Research):' : 'AI Research & Intelligence Report:'}</span>
+                    <span>{lang === 'ar' ? 'شرح مساعد للنتيجة (ليس تحققاً مستقلاً):' : 'AI-assisted explanation (not independent verification):'}</span>
                   </h3>
                   <span className="gemini-tag">{providerLabel}</span>
                 </div>
@@ -245,14 +252,12 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
                   <div className="ml-stat">
                     <span className="ml-stat-label">{t('result.mlLocalPrediction')}</span>
                     <span className={`ml-stat-badge ml-${(ml.classification || '').toLowerCase()}`}>
-                      {ml.classification === 'SAFE' ? t('result.mlSafeBadge') : ml.classification === 'DANGEROUS' ? t('result.mlDangerousBadge') : t('result.mlSuspiciousBadge')}
+                      {ml.classification === 'SAFE' ? (lang === 'ar' ? 'لم يرصد النموذج مؤشرات' : 'Model detected no indicators') : ml.classification === 'DANGEROUS' ? t('result.mlDangerousBadge') : t('result.mlSuspiciousBadge')}
                     </span>
                   </div>
-                  <div className="ml-stat">
-                    <span className="ml-stat-val" dir="ltr">
-                      {t('result.mlRiskProb', { prob: (ml.phishing_prob * 100).toFixed(1) })}
-                    </span>
-                  </div>
+                  <p className="muted" style={{ margin: '8px 0 0' }}>
+                    {lang === 'ar' ? 'توقع النموذج إشارة واحدة وليس إثباتاً نهائياً؛ لا تُعرض نسبة غير معايرة.' : 'The model output is one signal, not proof; uncalibrated percentages are withheld.'}
+                  </p>
                 </div>
               </div>
             )}

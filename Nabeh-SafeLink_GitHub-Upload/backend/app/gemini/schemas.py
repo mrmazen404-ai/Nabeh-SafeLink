@@ -10,12 +10,23 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_NUMERIC_PERCENTAGE = re.compile(r"(?<!\w)\d+(?:[.,]\d+)?\s*(?:%|٪)(?!\w)|\b\d+(?:[.,]\d+)?\s*(?:percent|per cent)\b", re.IGNORECASE)
 
 
 def _clean_text(value: str, max_length: int) -> str:
     value = _CONTROL_CHARS.sub("", html.unescape(value or ""))
     value = re.sub(r"<[^>]*>", "", value)
     return value.strip()[:max_length]
+
+
+def _contains_numeric_percentage(payload: BaseModel) -> bool:
+    fields = ("summary", "recommendation", "reasons", "limitations", "claim_verdict_explanation", "action_plan_steps")
+    for field in fields:
+        value = getattr(payload, field, None)
+        values = value if isinstance(value, list) else [value]
+        if any(isinstance(item, str) and _NUMERIC_PERCENTAGE.search(item) for item in values):
+            return True
+    return False
 
 
 class GeminiExplanation(BaseModel):
@@ -79,6 +90,8 @@ def validate_gemini_payload(payload: Any, *, fallback: dict[str, Any]) -> dict[s
     """Validate model data and return only the allow-listed schema fields."""
     try:
         parsed = GeminiExplanation.model_validate(payload)
+        if _contains_numeric_percentage(parsed):
+            raise ValueError("uncalibrated numeric percentage in explanation")
         return parsed.model_dump()
     except Exception:
         # Do not expose validation errors or raw model output to clients/logs.
@@ -98,7 +111,10 @@ def validate_gemini_payload(payload: Any, *, fallback: dict[str, Any]) -> dict[s
 def validate_gemini_sms_payload(payload: Any, *, fallback: dict[str, Any]) -> dict[str, Any]:
     """Validate SMS output; invalid provider output falls back without raw text."""
     try:
-        return GeminiSMSAnalysis.model_validate(payload).model_dump()
+        parsed = GeminiSMSAnalysis.model_validate(payload)
+        if _contains_numeric_percentage(parsed):
+            raise ValueError("uncalibrated numeric percentage in SMS analysis")
+        return parsed.model_dump()
     except Exception:
         safe_fallback = {
             "classification": fallback.get("classification", "UNKNOWN"),

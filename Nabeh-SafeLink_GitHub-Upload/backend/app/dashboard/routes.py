@@ -174,6 +174,8 @@ async def dashboard_overview(response: Response, authorization: Optional[str] = 
             "id,input_type,input_value_masked,classification,confidence_score,created_at,completed_at"
         ).eq("user_id", user_id).order("created_at", desc=True).limit(50).execute()
         scans = scans_result.data or []
+        for scan in scans:
+            scan["confidence_score"] = None
         notification_result = supabase.table("notifications").select("id", count="exact").eq(
             "user_id", user_id
         ).eq("is_read", False).execute()

@@ -11,6 +11,10 @@ def test_extract_url_from_text_naked_domains_and_explicit_urls():
     # 2. www. prefix
     assert ScanService.extract_url_from_text("زوروا موقعنا www.alrajhibank.com.sa") == "www.alrajhibank.com.sa"
 
+    # Public suffixes are not restricted to a hand-maintained TLD list.
+    assert ScanService.extract_url_from_text("راجع example.photography/path، ثم تابع") == "example.photography/path"
+    assert ScanService.extract_url_from_text("افتح https://example.com/path؟") == "https://example.com/path"
+
     # 3. Naked domains without http/https or www
     assert ScanService.extract_url_from_text("تحديث البيانات عبر bank-alrajhi-update.com/login الآن") == "bank-alrajhi-update.com/login"
     assert ScanService.extract_url_from_text("سدد الغرامة من خلال stc-pay-portal.sa فوراً") == "stc-pay-portal.sa"

@@ -62,3 +62,29 @@ def test_rate_limiters_fail_closed_by_default():
     assert _resend_cooldown_limiter.fail_closed is True
     assert _guest_limiter.namespace != _login_limiter.namespace
     assert _guest_limiter.namespace != _resend_limiter.namespace
+
+
+def test_production_settings_reject_fail_open_rate_limiting():
+    production = Settings()
+    production.ENVIRONMENT = "production"
+    production.ADMIN_JWT_SECRET = "a" * 64
+    production.ADMIN_BOOTSTRAP_TOKEN = "b" * 64
+    production.ADMIN_IP_SALT = "c" * 64
+    production.SUPABASE_SECRET_KEY = "d" * 64
+    production.ADMIN_TOTP_ENCRYPTION_KEY = "fernet-key-configured"
+    production.CORS_ALLOWED_ORIGINS = ("https://intellidefenda.com",)
+    production.RATE_LIMIT_FAIL_CLOSED = False
+
+    with pytest.raises(RuntimeError, match="NABEH_RATE_LIMIT_FAIL_CLOSED"):
+        production.validate_admin_security()
+
+
+def test_production_limiter_requires_private_salt(monkeypatch):
+    from app.security.guest_rate_limit import UpstashRateLimiter
+
+    monkeypatch.setenv("NABEH_ENVIRONMENT", "production")
+    monkeypatch.setenv("NABEH_RATE_LIMIT_SALT", "")
+    limiter = UpstashRateLimiter(url="https://redis.example", token="test-token", fail_closed=True)
+    assert limiter.configured is False
+from app.config import Settings
+import pytest

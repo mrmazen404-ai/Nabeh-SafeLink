@@ -74,10 +74,12 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
   const exp = result?.explanation || {};
   const messageText = result?.input_value || '';
   const extractedUrl = result?.extracted_url || null;
+  const linkAudit = result?.stages?.stage2_link_audit || {};
+  const linkAuditHasResults = Number(linkAudit.total_engines || vt.total_engines || 0) > 0;
   const providerName = (() => {
     const provider = String(exp?.provider || result?.source || '').toUpperCase();
     if (provider.includes('LOCAL') || provider.includes('FALLBACK') || provider.includes('RULES')) {
-      return lang === 'ar' ? 'تحليل أمني احتياطي' : 'Safe fallback analysis';
+      return lang === 'ar' ? 'تحليل محلي احتياطي' : 'Local fallback analysis';
     }
     if (provider.includes('GEMINI')) return lang === 'ar' ? 'تحليل الذكاء الاصطناعي' : 'AI security analysis';
     return lang === 'ar' ? 'تحليل أمني' : 'Security analysis';
@@ -151,8 +153,11 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
               {extractedUrl && (
                 <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px dashed var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: 'var(--color-warning)' }}>
                   <LinkIcon size={16} color="currentColor" />
-                  <span><strong>{lang === 'ar' ? 'رابط مدمج مكتشف داخل الرسالة (تم تحليله بنجاح):' : 'Extracted & Audited Embedded Link:'}</strong></span>
+                  <span><strong>{lang === 'ar' ? 'رابط مستخرج من الرسالة:' : 'Link extracted from message:'}</strong></span>
                   <span dir="ltr" style={{ textDecoration: 'underline', fontWeight: 'bold' }}>{extractedUrl}</span>
+                  <span>{lang === 'ar'
+                    ? (linkAuditHasResults ? 'تتوفر نتائج من محركات فحص الرابط أدناه.' : 'لم تتوفر نتيجة مكتملة من محركات فحص الرابط.')
+                    : (linkAuditHasResults ? 'URL engine results are available below.' : 'A complete URL engine result is not available.')}</span>
                 </div>
               )}
             </div>
@@ -220,7 +225,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: '600' }}>{lang === 'ar' ? 'حالة الأصالة والمصداقية:' : 'Authenticity Status:'}</span>
-                    <strong style={{ fontSize: '0.95rem', color: classification === 'DANGEROUS' ? 'var(--color-danger)' : classification === 'SUSPICIOUS' ? 'var(--color-warning)' : 'var(--color-success)' }}>
+                    <strong style={{ fontSize: '0.95rem', color: classification === 'DANGEROUS' ? 'var(--color-danger)' : classification === 'SUSPICIOUS' ? 'var(--color-warning)' : 'var(--color-text-subtle)' }}>
                       {exp.authenticity_status || (lang === 'ar' ? 'لم يتم التحقق من هوية المرسل' : 'Sender identity not verified')}
                     </strong>
                   </div>
@@ -250,7 +255,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <ShieldCheckIcon size={24} color="var(--color-secondary)" />
                     <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '800', color: 'var(--color-primary)' }}>
-                      {lang === 'ar' ? 'خطة نابه للتوجيه وإرشاد التصرف الآمن (Official Action Plan):' : 'Official Action & Safety Guidance Plan:'}
+                      {lang === 'ar' ? 'خطوات أمان مقترحة:' : 'Suggested safety steps:'}
                     </h3>
                   </div>
 
@@ -311,10 +316,10 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
               <div className="card details-block" style={{ borderInlineStart: '4px solid var(--color-warning)' }}>
                 <h3 className="details-title" style={{ color: 'var(--color-warning)' }}>
                   <LinkIcon size={18} color="currentColor" />
-                  <span>{lang === 'ar' ? 'تحليل أمان الرابط المدمج:' : 'Embedded Link Security Audit:'}</span>
+                  <span>{lang === 'ar' ? 'حالة الرابط المدمج:' : 'Embedded link status:'}</span>
                 </h3>
                 <p style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', margin: '0 0 12px 0' }}>
-                  {lang === 'ar' ? 'تم تحفيز نماذج فحص الروابط تلقائياً لفحص الرابط المكتشف داخل الرسالة.' : 'Automated URL scanning engines were triggered for the detected embedded link.'}
+                  {lang === 'ar' ? 'أُحيل الرابط المستخرج إلى مسار فحص الروابط؛ قد لا تتوفر نتيجة من كل مصدر.' : 'The extracted link was sent to URL analysis; some sources may not return a result.'}
                 </p>
 
                 {/* Proportional Stacked Engine Bar */}
@@ -352,7 +357,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
                     <div className="ml-stat">
                       <span className="ml-stat-label">{lang === 'ar' ? 'نموذج LightGBM للرابط:' : 'LightGBM Model:'}</span>
                       <span className={`ml-stat-badge ml-${(ml.classification || '').toLowerCase()}`}>
-                        {ml.classification === 'SAFE' ? t('result.mlSafeBadge') : ml.classification === 'DANGEROUS' ? t('result.mlDangerousBadge') : t('result.mlSuspiciousBadge')}
+                        {ml.classification === 'SAFE' ? (lang === 'ar' ? 'لم يرصد النموذج مؤشرات' : 'Model detected no indicators') : ml.classification === 'DANGEROUS' ? t('result.mlDangerousBadge') : t('result.mlSuspiciousBadge')}
                       </span>
                     </div>
                   </div>

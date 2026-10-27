@@ -33,24 +33,24 @@ export default function Faq({ activeTab, setActiveTab }) {
       category: 'results',
       question: lang === 'ar' ? 'ماذا تعني نتائج التصنيف الثلاثة: آمن (Safe)، مشبوه (Suspicious)، وخطر (Dangerous)؟' : 'What do the three classifications (Safe, Suspicious, Dangerous) mean?',
       answer: lang === 'ar'
-        ? '• آمن (Safe): لم يتم رصد أي مؤشرات خطر أو روابط احتيالية.\n• مشبوه (Suspicious): توجد مؤشرات توجب الحذر ويُنصح بعدم إدخال بيانات بنكية أو شخصية.\n• خطر (Dangerous): تم اكتشاف تهديد أمني مؤكد أو رابط تصيد خبيث، يُحظر النقر عليه إطلاقاً.'
-        : '• Safe: No threat indicators or phishing links detected.\n• Suspicious: Risk indicators detected; exercise caution and avoid credentials input.\n• Dangerous: Verified security threat or phishing link; do not click!',
+        ? '• لم تُرصد مؤشرات: لم تظهر مؤشرات تهديد في المصادر التي استجابت، وهذا لا يثبت أن الرابط آمن أو أن الرسالة أصلية.\n• مشبوه: ظهرت مؤشرات تستدعي الحذر والتحقق المستقل.\n• خطير: اجتمعت أدلة قوية وفق سياسة الدمج؛ لا تفتح الرابط ولا تشارك بياناتك.'
+        : '• No indicators detected: available sources returned no threat indicators; this does not prove a URL is safe or a message authentic.\n• Suspicious: indicators warrant caution and independent verification.\n• Dangerous: strong evidence met the fusion policy; do not open the link or share data.',
     },
     {
       id: 'q3',
       category: 'results',
-      question: lang === 'ar' ? 'ما هي درجة الثقة (Confidence Score) وهل تعني أن النتيجة مضمونة 100%؟' : 'What is the Confidence Score and does it guarantee 100% accuracy?',
+      question: lang === 'ar' ? 'لماذا لا تظهر نسبة للثقة؟' : 'Why is no confidence percentage shown?',
       answer: lang === 'ar'
-        ? 'تعبر درجة الثقة (مثلاً 95%) عن مدى مطابقة المؤشرات المحللة مع أنماط التهديدات السيبرانية المعروفة. نبيه يوفر أداة إرشادية مساعدة لتقييم المخاطر ولا يوجد أي نظام أمني إلكتروني يضمن عدم وجود تهديدات مجهولة بنسبة 100%.'
-        : 'The Confidence Score (e.g. 95%) represents how strongly analyzed indicators match known threat patterns. Nabeh provides decision-support risk evaluation; no security system guarantees 100% immunity against unknown threats.',
+        ? 'لا نعرض درجات رقمية غير معايرة. التصنيف إشارة مساعدة مبنية على الأدلة المتاحة وقت الفحص، ولا يضمن خلو الرابط أو الرسالة من التهديد.'
+        : 'Uncalibrated numeric scores are withheld. The classification is a decision-support signal based on evidence available at scan time and does not guarantee a URL or message is threat-free.',
     },
     {
       id: 'q4',
       category: 'results',
       question: lang === 'ar' ? 'كيف يجمع نبيه بين الذكاء الاصطناعي (Gemini)، محركات VirusTotal والتعلم الآلي (ML)؟' : 'How does Nabeh combine Gemini AI, VirusTotal, and Machine Learning?',
       answer: lang === 'ar'
-        ? 'يعتمد نبيه على محرك هجين: يفحص الهيكل النحوي عبر نموذج التعلم الآلي المحمول (Scikit-Learn ML)، ثم يستعلم أكثر من 70 محرك أمان عالمي عبر VirusTotal v3 API، ويحلل النص بصائغ الذكاء الاصطناعي التوليدي Google Gemini لتوفير شرح بليغ وتوصية حذرة.'
-        : 'Nabeh employs a hybrid engine: syntax inspection via local Scikit-Learn ML, VirusTotal v3 querying 70+ global vendor engines, and Google Gemini Generative AI for plain-language explanations and security advice.',
+        ? 'يستخدم نابه نموذج LightGBM محلياً لتقييم مؤشرات الرابط، ويستعلم عن VirusTotal عند توفر الخدمة. قد يساعد Gemini في تحليل سياق الرسالة أو شرح النتيجة عند تفعيله؛ وإذا نقصت الأدلة فالنتيجة غير محددة. عدم ظهور بلاغ لا يثبت السلامة.'
+        : 'Nabeh uses a local LightGBM model to assess URL indicators and queries VirusTotal when available. Gemini may analyze message context or explain results when enabled. Insufficient evidence yields an inconclusive result; absence of reports is not proof of safety.',
     },
     {
       id: 'q5',

@@ -7,7 +7,7 @@ import { CheckCircleIcon, AlertTriangleIcon, SearchIcon } from '../components/Ic
 import { useLanguage } from '../context/LanguageContext';
 
 export default function History({ onQuickScan, activeTab, setActiveTab, isGuest = true, onNavigateAuth }) {
-  const { t, dir } = useLanguage();
+  const { t, dir, lang } = useLanguage();
   const navigate = useNavigate();
   const [scans, setScans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -88,7 +88,7 @@ export default function History({ onQuickScan, activeTab, setActiveTab, isGuest 
           <div style={{ display: 'flex', gap: 'var(--space-2)' }} role="tablist" aria-label={t('history.title')}>
             {[
               { id: 'ALL', label: t('history.filterAll') },
-              { id: 'SAFE', label: t('history.filterSafe') },
+              { id: 'SAFE', label: lang === 'ar' ? 'لم تُرصد مؤشرات' : 'No indicators detected' },
               { id: 'SUSPICIOUS', label: t('history.filterSuspicious') },
               { id: 'DANGEROUS', label: t('history.filterDangerous') }
             ].map((f) => (
@@ -138,8 +138,13 @@ export default function History({ onQuickScan, activeTab, setActiveTab, isGuest 
               const color = isSafe ? 'var(--color-success)' : isDangerous ? 'var(--color-danger)' : 'var(--color-warning)';
               const bg = isSafe ? 'var(--color-success-bg)' : isDangerous ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)';
               const displayVal = scan.input_value_masked || t('home.scannedUrl');
-              const statusText = isSafe ? t('history.filterSafe') : isDangerous ? t('history.filterDangerous') : t('history.filterSuspicious');
-              const pct = ((scan.confidence_score || 0.9) * 100).toFixed(0);
+              const statusText = isSafe
+                ? (lang === 'ar' ? 'لم تُرصد مؤشرات' : 'No indicators detected')
+                : isDangerous
+                  ? t('history.filterDangerous')
+                  : scan.classification === 'SUSPICIOUS'
+                    ? t('history.filterSuspicious')
+                    : t('scanDetails.labels.UNKNOWN');
 
               return (
                 <button
@@ -180,7 +185,7 @@ export default function History({ onQuickScan, activeTab, setActiveTab, isGuest 
                       {displayVal}
                     </span>
                     <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                      {statusText} • {t('history.confidence', { pct })}
+                      {statusText} • {lang === 'ar' ? 'درجة الثقة غير متاحة' : 'Confidence unavailable'}
                     </span>
                   </div>
 

@@ -29,6 +29,8 @@ class Settings:
     SCAN_AI_TIMEOUT_SECONDS: float = float(os.getenv("SCAN_AI_TIMEOUT_SECONDS", "18"))
     SCAN_TOTAL_TIMEOUT_SECONDS: float = max(1.0, float(os.getenv("SCAN_TOTAL_TIMEOUT_SECONDS", "30")))
     NABEH_TRUST_PROXY_HEADERS: bool = os.getenv("NABEH_TRUST_PROXY_HEADERS", "false").lower() in {"1", "true", "yes"}
+    RATE_LIMIT_FAIL_CLOSED: bool = os.getenv("NABEH_RATE_LIMIT_FAIL_CLOSED", "true").lower() in {"1", "true", "yes"}
+    RATE_LIMIT_SALT: str = os.getenv("NABEH_RATE_LIMIT_SALT", "")
     APP_NAME: str = os.getenv("APP_NAME", "Nabeh SafeLink")
     APP_VERSION: str = os.getenv("APP_VERSION", "1.0.0")
     CORS_ALLOWED_ORIGINS: tuple = tuple(
@@ -52,6 +54,8 @@ class Settings:
             raise RuntimeError("ADMIN_TOTP_ENCRYPTION_KEY is required in production")
         if not self.CORS_ALLOWED_ORIGINS:
             raise RuntimeError("Explicit CORS origins are required in production")
+        if not self.RATE_LIMIT_FAIL_CLOSED:
+            raise RuntimeError("NABEH_RATE_LIMIT_FAIL_CLOSED must be true in production")
 
 
 settings = Settings()

@@ -11,6 +11,29 @@ def test_invalid_url_is_unknown_not_dangerous():
         assert result["source"] in {"EMPTY_INPUT", "INVALID_URL"}
 
 
+def test_malformed_ports_are_unknown():
+    for value in ("https://example.com:99999/path", "https://example.com:abc/path"):
+        result = predict_url(value)
+        assert result["classification"] == "UNKNOWN"
+        assert result["source"] == "INVALID_URL"
+
+
+def test_encoded_structural_delimiters_are_unknown():
+    for value in (
+        "https://example.com/a%2fb",
+        "https://example.com/a%3fb=1",
+        "https://example.com/a%23fragment",
+    ):
+        result = predict_url(value)
+        assert result["classification"] == "UNKNOWN"
+        assert result["source"] == "AMBIGUOUS_URL_ENCODING"
+
+
+def test_encoded_question_mark_does_not_change_raw_query_boundary():
+    features = extract_features("https://example.com/a%3fb=1")
+    assert features["query_length"] == 0
+
+
 def test_feature_contract_matches_retrained_report():
     report_path = os.path.join(os.path.dirname(__file__), "../app/ml/nabeh_model_retrained_report.json")
     if not os.path.exists(report_path):

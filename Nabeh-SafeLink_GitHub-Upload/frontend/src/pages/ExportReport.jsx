@@ -6,6 +6,21 @@ import { getScanDetails } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 import './advanced-pages.css';
 
+const UNCALIBRATED_SCORE_FIELDS = new Set([
+  'confidence', 'confidence_score', 'confidence_level', 'phishing_prob',
+  'ml_phishing_prob', 'fraud_probability', 'weighted_score',
+  'urgency_pressure_score', 'credential_theft_score', 'identity_spoofing_score',
+]);
+
+function redactUncalibratedScores(value) {
+  if (Array.isArray(value)) return value.map(redactUncalibratedScores);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    UNCALIBRATED_SCORE_FIELDS.has(key) ? null : redactUncalibratedScores(item),
+  ]));
+}
+
 export default function ExportReport({ activeTab, setActiveTab, onNavigateAuth }) {
   const { dir, t, lang } = useLanguage();
   const [params] = useSearchParams();
@@ -34,13 +49,14 @@ export default function ExportReport({ activeTab, setActiveTab, onNavigateAuth }
 
   const scan = report?.scan;
   const explanation = report?.explanation;
+  const sanitizedScan = scan ? redactUncalibratedScores(scan) : null;
   const payload = report
     ? {
         report_type: 'Nabeh SafeLink Scan Report',
         generated_at: new Date().toISOString(),
-        scan,
+        scan: sanitizedScan,
         explanation,
-        analysis_stages: scan?.analysis_snapshot || {},
+        analysis_stages: sanitizedScan?.analysis_snapshot || {},
       }
     : null;
 
@@ -63,7 +79,7 @@ export default function ExportReport({ activeTab, setActiveTab, onNavigateAuth }
       ['scan_id', scan?.id],
       ['input_type', scan?.input_type],
       ['classification', scan?.classification],
-      ['confidence_score', scan?.confidence_score],
+      ['confidence_score', null],
       ['status', scan?.status],
       ['created_at', scan?.created_at],
       ['completed_at', scan?.completed_at],
@@ -109,9 +125,7 @@ export default function ExportReport({ activeTab, setActiveTab, onNavigateAuth }
                 <div>
                   <span>{t('exportReport.confidence')}</span>
                   <strong>
-                    {scan.confidence_score == null
-                      ? t('exportReport.notAvailable')
-                      : `${(scan.confidence_score * 100).toFixed(1)}%`}
+                    {t('exportReport.notAvailable')}
                   </strong>
                 </div>
                 <div>

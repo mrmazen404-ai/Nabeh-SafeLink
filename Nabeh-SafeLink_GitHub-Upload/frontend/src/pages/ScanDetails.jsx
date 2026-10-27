@@ -7,6 +7,21 @@ import { useLanguage } from '../context/LanguageContext';
 import { AlertTriangleIcon, CheckCircleIcon, ShieldCheckIcon } from '../components/Icons';
 import './advanced-pages.css';
 
+const UNCALIBRATED_SCORE_FIELDS = new Set([
+  'confidence', 'confidence_score', 'confidence_level', 'phishing_prob',
+  'ml_phishing_prob', 'fraud_probability', 'weighted_score',
+  'urgency_pressure_score', 'credential_theft_score', 'identity_spoofing_score',
+]);
+
+function redactUncalibratedScores(value) {
+  if (Array.isArray(value)) return value.map(redactUncalibratedScores);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    UNCALIBRATED_SCORE_FIELDS.has(key) ? null : redactUncalibratedScores(item),
+  ]));
+}
+
 export default function ScanDetails({ activeTab, setActiveTab, onNavigateAuth }) {
   const { dir, t, lang } = useLanguage();
   const { scanId } = useParams();
@@ -32,9 +47,11 @@ export default function ScanDetails({ activeTab, setActiveTab, onNavigateAuth })
   const scan = data?.scan;
   const explanation = data?.explanation;
   const stages = scan?.analysis_snapshot && Object.keys(scan.analysis_snapshot).length ? scan.analysis_snapshot : {};
-  const stageList = Object.entries(stages);
+  const stageList = Object.entries(stages).map(([key, value]) => [key, redactUncalibratedScores(value)]);
 
-  const getLabel = (cls) => t(`scanDetails.labels.${cls}`) || cls || t('scanDetails.labels.UNKNOWN');
+  const getLabel = (cls) => cls === 'SAFE'
+    ? (lang === 'ar' ? 'لم تُرصد مؤشرات' : 'No indicators detected')
+    : t(`scanDetails.labels.${cls}`) || cls || t('scanDetails.labels.UNKNOWN');
   const getStageName = (key) => t(`scanDetails.stages.${key}`) || key;
 
   return (
@@ -57,14 +74,14 @@ export default function ScanDetails({ activeTab, setActiveTab, onNavigateAuth })
                 <p dir="ltr">{scan.input_value_masked || '••••'}</p>
               </div>
               <div className="verdict-pill">
-                {scan.classification === 'DANGEROUS' ? <AlertTriangleIcon size={20} /> : <CheckCircleIcon size={20} />}
+                {scan.classification === 'SAFE' ? <CheckCircleIcon size={20} /> : <AlertTriangleIcon size={20} />}
                 {getLabel(scan.classification)}
               </div>
             </section>
 
             <section className="details-meta">
               <Meta label={t('scanDetails.inputType')} value={scan.input_type === 'TEXT' ? t('scanDetails.textType') : t('scanDetails.urlType')} />
-              <Meta label={t('scanDetails.confidence')} value={scan.confidence_score == null ? t('scanDetails.notAvailable') : `${(scan.confidence_score * 100).toFixed(1)}%`} />
+              <Meta label={t('scanDetails.confidence')} value={t('scanDetails.notAvailable')} />
               <Meta label={t('scanDetails.completedAt')} value={formatDate(scan.completed_at || scan.created_at, lang)} />
               <Meta label={t('scanDetails.status')} value={scan.status === 'COMPLETED' ? t('scanDetails.statusCompleted') : scan.status} />
             </section>
@@ -91,7 +108,7 @@ export default function ScanDetails({ activeTab, setActiveTab, onNavigateAuth })
                     stage={{
                       status: 'COMPLETED',
                       classification: scan.classification,
-                      confidence: scan.confidence_score,
+                      confidence: null,
                       note: t('scanDetails.legacyNote'),
                     }}
                     t={t}
@@ -101,7 +118,7 @@ export default function ScanDetails({ activeTab, setActiveTab, onNavigateAuth })
                     stage={{
                       status: 'COMPLETED',
                       classification: scan.classification,
-                      confidence: scan.confidence_score,
+                      confidence: null,
                     }}
                     t={t}
                   />

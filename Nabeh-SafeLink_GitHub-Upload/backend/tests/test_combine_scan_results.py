@@ -53,6 +53,22 @@ def test_safe_requires_positive_evidence():
     assert result["classification"] == "SAFE"
     print("✓ VT clean + ML safe → SAFE")
 
+
+def test_ml_only_safe_is_unknown():
+    result = ScanService.combine_scan_results(
+        {"status": "UNKNOWN", "total_engines": 0},
+        {"classification": "SAFE", "phishing_prob": 0.02, "source": "ML_MODEL"},
+    )
+    assert result["classification"] == "UNKNOWN"
+
+
+def test_virustotal_clean_without_ml_is_unknown():
+    result = ScanService.combine_scan_results(
+        {"status": "SAFE", "harmless": 80, "malicious": 0, "suspicious": 0, "total_engines": 80},
+        {"classification": "UNKNOWN", "source": "MODEL_UNAVAILABLE"},
+    )
+    assert result["classification"] == "UNKNOWN"
+
 def test_partial_vt_weighted_fallback_cannot_be_dangerous():
     vt = {"status": "SUSPICIOUS", "malicious": 0, "suspicious": 1, "harmless": 0, "total_engines": 1}
     # Deliberately inconsistent upstream tuple exercises conservative fusion.
