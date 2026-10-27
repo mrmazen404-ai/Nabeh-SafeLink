@@ -37,22 +37,51 @@ MODEL_PATH = RETRAINED_MODEL_PATH if os.path.exists(RETRAINED_MODEL_PATH) else O
 
 model_bundle = None
 _model_load_attempted = False
+_model_load_status = "NOT_CHECKED"
 
 
 def _load_trusted_model():
-    global model_bundle, _model_load_attempted
+    global model_bundle, _model_load_attempted, _model_load_status
     if model_bundle is not None or _model_load_attempted:
         return model_bundle
     _model_load_attempted = True
     if os.getenv("NABEH_TRUST_MODEL_ARTIFACT", "").lower() not in {"1", "true", "yes"}:
+        _model_load_status = "TRUST_DISABLED"
         return None
     if not os.path.exists(MODEL_PATH):
+        _model_load_status = "ARTIFACT_MISSING"
         return None
     try:
-        model_bundle = joblib.load(MODEL_PATH)
+        loaded = joblib.load(MODEL_PATH)
+        if (
+            not isinstance(loaded, dict)
+            or not hasattr(loaded.get("model"), "predict_proba")
+            or not isinstance(loaded.get("feature_names"), (list, tuple))
+        ):
+            _model_load_status = "ARTIFACT_INVALID"
+            return None
+        model_bundle = loaded
+        _model_load_status = "READY"
     except Exception:
         model_bundle = None
+        _model_load_status = "LOAD_FAILED"
     return model_bundle
+
+
+def get_model_readiness() -> dict:
+    """Return non-sensitive model readiness state for health diagnostics."""
+    if model_bundle is not None:
+        return {"status": "ready", "code": "MODEL_READY"}
+    _load_trusted_model()
+    if model_bundle is not None:
+        return {"status": "ready", "code": "MODEL_READY"}
+    code = {
+        "TRUST_DISABLED": "MODEL_TRUST_DISABLED",
+        "ARTIFACT_MISSING": "MODEL_ARTIFACT_MISSING",
+        "ARTIFACT_INVALID": "MODEL_ARTIFACT_INVALID",
+        "LOAD_FAILED": "MODEL_ARTIFACT_LOAD_FAILED",
+    }.get(_model_load_status, "MODEL_UNAVAILABLE")
+    return {"status": "unavailable", "code": code}
 
 
 def normalize_url(value: str) -> str:

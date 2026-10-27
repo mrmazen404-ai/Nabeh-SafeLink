@@ -18,6 +18,7 @@ from app.system_settings import setting_enabled_fail_closed
 from app.scans.text_rules import analyze_message_indicators
 
 logger = logging.getLogger(__name__)
+MAX_EMBEDDED_URLS = 5
 
 ARABIC_PHISHING_KEYWORDS = (
     "حسابك", "البنك", "تجميد", "تحديث", "كلمة المرور", "بطاقة", "جائزة",
@@ -32,25 +33,46 @@ class ScanPersistenceError(Exception):
 
 class ScanService:
     @staticmethod
-    def extract_url_from_text(text: str) -> str:
+    def extract_urls_from_text(text: str) -> list[str]:
         if not text:
-            return ""
-        # 1. Match explicit scheme or www. prefix
-        explicit_match = re.search(r"(?:https?://|www\.)[^\s,;،؛؟۔\"'<>()]+", text, re.IGNORECASE)
-        if explicit_match:
-            return explicit_match.group(0).rstrip(".,;:!?'\")")
-
-        # 2. Match naked domains without a hand-maintained TLD allowlist.
+            return []
+        explicit_pattern = re.compile(r"(?:https?://|www\.)[^\s,;،؛؟۔\"'<>]+", re.IGNORECASE)
         tld_pattern = (
             r"\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+"
             r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
             r"(?:/[^\s,;،؛؟۔\"'<>()]*)?"
         )
-        naked_match = re.search(tld_pattern, text, re.IGNORECASE)
-        if naked_match:
-            return naked_match.group(0).rstrip(".,;:!?'\")")
+        explicit_matches = list(explicit_pattern.finditer(text))
+        spans = [(match.start(), match.end()) for match in explicit_matches]
+        matches = [(match.start(), match.group(0)) for match in explicit_matches]
+        for match in re.finditer(tld_pattern, text, re.IGNORECASE):
+            if any(start <= match.start() < end for start, end in spans):
+                continue
+            matches.append((match.start(), match.group(0)))
 
-        return ""
+        urls = []
+        seen = set()
+        for _, candidate in sorted(matches, key=lambda item: item[0]):
+            candidate = candidate.rstrip(".,;:!?')")
+            normalized = candidate if candidate.lower().startswith(("http://", "https://")) else f"https://{candidate}"
+            parsed = urlsplit(normalized)
+            key = (
+                parsed.scheme.lower(),
+                parsed.netloc.lower(),
+                parsed.path or "/",
+                parsed.query,
+                parsed.fragment,
+            )
+            if candidate and key not in seen:
+                seen.add(key)
+                urls.append(candidate)
+        return urls
+
+    @staticmethod
+    def extract_url_from_text(text: str) -> str:
+        """Backward-compatible first-URL accessor for callers expecting a scalar."""
+        urls = ScanService.extract_urls_from_text(text)
+        return urls[0] if urls else ""
 
     @staticmethod
     def analyze_text_phishing(text: str, has_embedded_url: bool = False) -> dict:
@@ -403,27 +425,52 @@ class ScanService:
     async def process_text_scan(cls, text_content: str, language: str = "ar") -> dict:
         """100% AI-Driven SMS / Text Message Smishing Scanner (Gemini AI API + Link Audit Pipeline)."""
         deadline = asyncio.get_running_loop().time() + settings.SCAN_TOTAL_TIMEOUT_SECONDS
-        extracted_url = cls.extract_url_from_text(text_content)
-        vt_result, ml_result = {}, {}
+        all_extracted_urls = cls.extract_urls_from_text(text_content)
+        extracted_urls = all_extracted_urls[:MAX_EMBEDDED_URLS]
+        unscanned_url_count = max(0, len(all_extracted_urls) - len(extracted_urls))
+        extracted_url = extracted_urls[0] if extracted_urls else ""
+        semaphore = asyncio.Semaphore(2)
 
-        if extracted_url:
+        async def analyze_embedded_url(url: str) -> dict:
             try:
-                ml_result = predict_url(extracted_url)
+                ml = await asyncio.to_thread(predict_url, url)
             except Exception:
                 logger.exception("sms_ml_analysis_failed")
-                ml_result = {"classification": "UNKNOWN", "confidence": None, "source": "ML_ERROR"}
+                ml = {"classification": "UNKNOWN", "confidence": None, "source": "ML_ERROR"}
 
-            try:
+            async with semaphore:
                 remaining = max(0.0, deadline - asyncio.get_running_loop().time())
-                vt_result = await asyncio.wait_for(check_url_virustotal(extracted_url), timeout=remaining)
-            except asyncio.TimeoutError:
-                logger.warning("sms_scan_total_deadline_virustotal")
-                vt_result = {"status": "UNKNOWN", "error": "SCAN_DEADLINE_EXCEEDED"}
-            except Exception:
-                logger.exception("sms_virustotal_failed")
-                vt_result = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
+                if remaining <= 0:
+                    vt = {"status": "UNKNOWN", "error": "SCAN_DEADLINE_EXCEEDED"}
+                else:
+                    try:
+                        vt = await asyncio.wait_for(
+                            check_url_virustotal(url), timeout=min(8.0, remaining)
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("sms_scan_total_deadline_virustotal")
+                        vt = {"status": "UNKNOWN", "error": "SCAN_DEADLINE_EXCEEDED"}
+                    except Exception:
+                        logger.exception("sms_virustotal_failed")
+                        vt = {"status": "UNKNOWN", "error": "VIRUSTOTAL_UNAVAILABLE"}
+            return {"url": url, "ml": ml, "virustotal": vt, "combined": cls.combine_scan_results(vt, ml)}
 
-            combined = cls.combine_scan_results(vt_result, ml_result)
+        embedded_url_analyses = await asyncio.gather(
+            *(analyze_embedded_url(url) for url in extracted_urls)
+        )
+        if embedded_url_analyses:
+            rank = {"SAFE": 0, "UNKNOWN": 1, "SUSPICIOUS": 2, "DANGEROUS": 3}
+            strongest = max(
+                embedded_url_analyses,
+                key=lambda item: rank.get(str(item["combined"].get("classification", "UNKNOWN")).upper(), 1),
+            )
+            combined = dict(strongest["combined"])
+            if unscanned_url_count and combined.get("classification") == "SAFE":
+                combined.update(classification="UNKNOWN", confidence=None, source="PARTIAL_LINK_ANALYSIS")
+            elif len(embedded_url_analyses) > 1:
+                combined["source"] = "MULTIPLE_EMBEDDED_URLS"
+            vt_result = embedded_url_analyses[0]["virustotal"]
+            ml_result = embedded_url_analyses[0]["ml"]
         else:
             combined = {
                 "classification": "UNKNOWN",
@@ -432,12 +479,24 @@ class ScanService:
                 "source": "TEXT_ONLY",
             }
             vt_result = {"status": "NOT_APPLICABLE", "total_engines": 0}
+            ml_result = {"classification": "UNKNOWN", "source": "NOT_APPLICABLE"}
 
         evidence = {
             "ml": ml_result,
             "virustotal": vt_result,
             "input_type": "TEXT",
             "extracted_url": extracted_url,
+            "embedded_url_analyses": [
+                {
+                    "url": item["url"],
+                    "classification": item["combined"].get("classification", "UNKNOWN"),
+                    "source": item["combined"].get("source", "UNKNOWN"),
+                    "ml": item["ml"],
+                    "virustotal": item["virustotal"],
+                }
+                for item in embedded_url_analyses
+            ],
+            "unscanned_url_count": unscanned_url_count,
             "url_combined_verdict": combined,
         }
 
@@ -530,6 +589,20 @@ class ScanService:
             "input_type": "TEXT",
             "input_value": text_content,
             "extracted_url": extracted_url or None,
+            "extracted_urls": all_extracted_urls,
+            "links_scanned_count": len(embedded_url_analyses),
+            "links_not_scanned_count": unscanned_url_count,
+            "embedded_url_analyses": [
+                {
+                    "url": item["url"],
+                    "classification": item["combined"].get("classification", "UNKNOWN"),
+                    "source": item["combined"].get("source", "UNKNOWN"),
+                    "ml_classification": item["ml"].get("classification", "UNKNOWN"),
+                    "ml_source": item["ml"].get("source", "N/A"),
+                    "virustotal": item["virustotal"],
+                }
+                for item in embedded_url_analyses
+            ],
             "classification": classification,
             "confidence": confidence,
             "fraud_probability": fraud_prob,
@@ -537,6 +610,9 @@ class ScanService:
             "text_analysis": {
                 "has_embedded_url": bool(extracted_url),
                 "extracted_url": extracted_url or None,
+                "extracted_urls": all_extracted_urls,
+                "links_scanned_count": len(embedded_url_analyses),
+                "links_not_scanned_count": unscanned_url_count,
                 "lure_type": ai_analysis.get("lure_type", ""),
                 "fraud_probability": fraud_prob,
             },
@@ -555,6 +631,23 @@ class ScanService:
                     "malicious": vt_result.get("malicious", 0),
                     "suspicious": vt_result.get("suspicious", 0),
                     "total_engines": vt_result.get("total_engines", 0),
+                    "urls_scanned_count": len(embedded_url_analyses),
+                    "urls_not_scanned_count": unscanned_url_count,
+                    "results": [
+                        {
+                            "url": item["url"],
+                            "classification": item["combined"].get("classification", "UNKNOWN"),
+                            "source": item["combined"].get("source", "UNKNOWN"),
+                            "virustotal_status": item["virustotal"].get("status", "UNKNOWN"),
+                            "malicious": item["virustotal"].get("malicious", 0),
+                            "suspicious": item["virustotal"].get("suspicious", 0),
+                            "harmless": item["virustotal"].get("harmless", 0),
+                            "total_engines": item["virustotal"].get("total_engines", 0),
+                            "ml_classification": item["ml"].get("classification", "UNKNOWN"),
+                            "ml_source": item["ml"].get("source", "N/A"),
+                        }
+                        for item in embedded_url_analyses
+                    ],
                     "ml_phishing_prob": None,
                 },
                 "stage3_gemini_sms": {
@@ -566,12 +659,20 @@ class ScanService:
             },
             "explanation": explanation,
             "virustotal": vt_result,
+            "virustotal_results": [item["virustotal"] for item in embedded_url_analyses],
             "ml_model": {
                 "classification": ml_result.get("classification", "UNKNOWN"),
                 "confidence": None,
                 "phishing_prob": None,
                 "source": ml_result.get("source", "N/A"),
             },
+            "ml_models": [
+                {
+                    "classification": item["ml"].get("classification", "UNKNOWN"),
+                    "source": item["ml"].get("source", "N/A"),
+                }
+                for item in embedded_url_analyses
+            ],
         }
 
     @classmethod

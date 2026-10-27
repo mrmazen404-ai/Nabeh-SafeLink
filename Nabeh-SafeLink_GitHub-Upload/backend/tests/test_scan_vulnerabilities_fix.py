@@ -128,3 +128,41 @@ def test_sanitizer_recognizes_brand_tokens_but_not_substrings():
     )
     assert branded["official_portal_url"] == "https://www.paypal.com"
     assert branded["official_domain"] == "paypal.com"
+
+
+def test_extract_urls_from_text_returns_distinct_links_in_message_order():
+    text = "افحص https://one.example/login، ثم www.two.example/path وبعدها one.example/login"
+
+    assert ScanService.extract_urls_from_text(text) == [
+        "https://one.example/login",
+        "www.two.example/path",
+    ]
+
+
+@pytest.mark.anyio
+async def test_sms_scan_routes_each_embedded_url_and_reports_unscanned_links(monkeypatch):
+    ml_urls = []
+    vt_urls = []
+
+    def fake_predict(url):
+        ml_urls.append(url)
+        return {"classification": "UNKNOWN", "confidence": None, "source": "MODEL_UNAVAILABLE"}
+
+    async def fake_virustotal(url):
+        vt_urls.append(url)
+        return {"status": "UNKNOWN", "total_engines": 0}
+
+    monkeypatch.setattr("app.scans.service.predict_url", fake_predict)
+    monkeypatch.setattr("app.scans.service.check_url_virustotal", fake_virustotal)
+    monkeypatch.setattr("app.scans.service.setting_enabled_fail_closed", lambda *_: False)
+    urls = [f"https://domain{index}.example/path" for index in range(6)]
+
+    result = await ScanService.process_text_scan("رسالة تحتوي على: " + " ".join(urls))
+
+    expected_scanned = urls[:5]
+    assert sorted(ml_urls) == sorted(expected_scanned)
+    assert sorted(vt_urls) == sorted(expected_scanned)
+    assert result["extracted_urls"] == urls
+    assert result["links_scanned_count"] == 5
+    assert result["links_not_scanned_count"] == 1
+    assert result["classification"] == "UNKNOWN"

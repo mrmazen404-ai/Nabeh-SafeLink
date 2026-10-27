@@ -74,8 +74,14 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
   const exp = result?.explanation || {};
   const messageText = result?.input_value || '';
   const extractedUrl = result?.extracted_url || null;
-  const linkAudit = result?.stages?.stage2_link_audit || {};
-  const linkAuditHasResults = Number(linkAudit.total_engines || vt.total_engines || 0) > 0;
+  const extractedUrls = Array.isArray(result?.extracted_urls) && result.extracted_urls.length
+    ? result.extracted_urls
+    : (extractedUrl ? [extractedUrl] : []);
+  const linkAnalyses = Array.isArray(result?.embedded_url_analyses) && result.embedded_url_analyses.length
+    ? result.embedded_url_analyses
+    : (extractedUrl ? [{ url: extractedUrl, classification: result?.classification || 'UNKNOWN', ml_classification: ml.classification, ml_source: ml.source, virustotal: vt }] : []);
+  const linksScannedCount = Number(result?.links_scanned_count ?? linkAnalyses.length);
+  const linksNotScannedCount = Number(result?.links_not_scanned_count || 0);
   const providerName = (() => {
     const provider = String(exp?.provider || result?.source || '').toUpperCase();
     if (provider.includes('LOCAL') || provider.includes('FALLBACK') || provider.includes('RULES')) {
@@ -101,11 +107,6 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
   const rawPortal = exp?.official_portal_url;
   const officialPortal = rawPortal && !isInvalidOrGenericPortal(rawPortal) ? rawPortal : null;
   const actionSteps = Array.isArray(exp?.action_plan_steps) && exp.action_plan_steps.length > 0 ? exp.action_plan_steps : [];
-
-  const totalEngines = vt.total_engines || 0;
-  const maliciousPct = totalEngines > 0 ? ((vt.malicious || 0) / totalEngines) * 100 : 0;
-  const suspiciousPct = totalEngines > 0 ? ((vt.suspicious || 0) / totalEngines) * 100 : 0;
-  const harmlessPct = totalEngines > 0 ? ((vt.harmless || 0) / totalEngines) * 100 : 0;
 
   const handleCopyReport = () => {
     if (isGuest || !navigator.clipboard?.writeText) return;
@@ -150,14 +151,27 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
                 {messageText}
               </div>
 
-              {extractedUrl && (
-                <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px dashed var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', color: 'var(--color-warning)' }}>
-                  <LinkIcon size={16} color="currentColor" />
-                  <span><strong>{lang === 'ar' ? 'رابط مستخرج من الرسالة:' : 'Link extracted from message:'}</strong></span>
-                  <span dir="ltr" style={{ textDecoration: 'underline', fontWeight: 'bold' }}>{extractedUrl}</span>
-                  <span>{lang === 'ar'
-                    ? (linkAuditHasResults ? 'تتوفر نتائج من محركات فحص الرابط أدناه.' : 'لم تتوفر نتيجة مكتملة من محركات فحص الرابط.')
-                    : (linkAuditHasResults ? 'URL engine results are available below.' : 'A complete URL engine result is not available.')}</span>
+              {extractedUrls.length > 0 && (
+                <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px dashed var(--color-border-subtle)', fontSize: '0.9rem', color: 'var(--color-warning)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <LinkIcon size={16} color="currentColor" />
+                    <strong>{lang === 'ar' ? `الروابط المستخرجة (${extractedUrls.length}):` : `Links extracted (${extractedUrls.length}):`}</strong>
+                  </div>
+                  <ul style={{ margin: 0, paddingInlineStart: '22px', display: 'grid', gap: '6px' }}>
+                    {extractedUrls.map((url, index) => (
+                      <li key={`${url}-${index}`} dir="ltr" style={{ wordBreak: 'break-all', fontWeight: 'bold' }}>{url}</li>
+                    ))}
+                  </ul>
+                  <div style={{ marginTop: '8px' }}>
+                    {lang === 'ar'
+                      ? `أُحيل ${linksScannedCount} رابط إلى التحليل؛ عدد محركات الفحص يختلف حسب توفر المزود.`
+                      : `${linksScannedCount} link(s) were sent for analysis; engine availability varies.`}
+                    {linksNotScannedCount > 0 && (
+                      <strong style={{ display: 'block', color: 'var(--color-danger)', marginTop: '4px' }}>
+                        {lang === 'ar' ? `تنبيه: ${linksNotScannedCount} رابط لم يُفحص بسبب حد المعالجة؛ لا تفتحه.` : `Warning: ${linksNotScannedCount} link(s) were not scanned due to the processing limit; do not open them.`}
+                      </strong>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -311,57 +325,51 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
               </div>
             )}
 
-            {/* If an embedded link was audited in the SMS */}
-            {extractedUrl && (
-              <div className="card details-block" style={{ borderInlineStart: '4px solid var(--color-warning)' }}>
-                <h3 className="details-title" style={{ color: 'var(--color-warning)' }}>
-                  <LinkIcon size={18} color="currentColor" />
-                  <span>{lang === 'ar' ? 'حالة الرابط المدمج:' : 'Embedded link status:'}</span>
-                </h3>
-                <p style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', margin: '0 0 12px 0' }}>
-                  {lang === 'ar' ? 'أُحيل الرابط المستخرج إلى مسار فحص الروابط؛ قد لا تتوفر نتيجة من كل مصدر.' : 'The extracted link was sent to URL analysis; some sources may not return a result.'}
-                </p>
-
-                {/* Proportional Stacked Engine Bar */}
-                {totalEngines > 0 && (
-                  <div style={{ height: '8px', display: 'flex', borderRadius: '4px', overflow: 'hidden', margin: '8px 0 12px 0', background: 'var(--color-bg-subtle)' }}>
-                    {vt.malicious > 0 && <div style={{ width: `${maliciousPct}%`, background: 'var(--color-danger)' }} title={`Malicious: ${vt.malicious}`} />}
-                    {vt.suspicious > 0 && <div style={{ width: `${suspiciousPct}%`, background: 'var(--color-warning)' }} title={`Suspicious: ${vt.suspicious}`} />}
-                    {vt.harmless > 0 && <div style={{ width: `${harmlessPct}%`, background: 'var(--color-success)' }} title={`Harmless: ${vt.harmless}`} />}
-                  </div>
-                )}
-
-                {totalEngines > 0 && (
-                  <div className="details-grid" style={{ marginBottom: '12px' }}>
-                    <div className="detail-item">
-                      <span className="detail-label">{t('result.vtDangerous')}</span>
-                      <span className="detail-value" style={{ color: 'var(--color-danger)' }}>{vt.malicious || 0}</span>
+            {linkAnalyses.map((item, index) => {
+              const linkVt = item?.virustotal || {};
+              const linkMl = item?.ml_classification || 'UNKNOWN';
+              const linkMlSource = item?.ml_source || 'N/A';
+              const linkClassification = item?.classification || 'UNKNOWN';
+              const engines = Number(linkVt.total_engines || 0);
+              const label = linkClassification === 'DANGEROUS'
+                ? (lang === 'ar' ? 'خطر قوي' : 'Strong risk signal')
+                : linkClassification === 'SUSPICIOUS'
+                  ? (lang === 'ar' ? 'مريب' : 'Suspicious')
+                  : linkClassification === 'SAFE'
+                    ? (lang === 'ar' ? 'لم ترصد إشارات ضمن الفحص المتاح' : 'No signals in available checks')
+                    : (lang === 'ar' ? 'غير محسوم' : 'Inconclusive');
+              const vtMalicious = Number(linkVt.malicious || 0);
+              const vtSuspicious = Number(linkVt.suspicious || 0);
+              const vtHarmless = Number(linkVt.harmless || 0);
+              return (
+                <div className="card details-block" key={`${item?.url || index}-${index}`} style={{ borderInlineStart: '4px solid var(--color-warning)' }}>
+                  <h3 className="details-title" style={{ color: 'var(--color-warning)' }}>
+                    <LinkIcon size={18} color="currentColor" />
+                    <span>{lang === 'ar' ? `تحليل الرابط ${index + 1}:` : `Link analysis ${index + 1}:`}</span>
+                  </h3>
+                  <div dir="ltr" style={{ wordBreak: 'break-all', fontSize: '0.82rem', marginBottom: '10px' }}>{item?.url || extractedUrls[index]}</div>
+                  <p style={{ fontSize: '0.84rem', color: 'var(--color-text-primary)', margin: '0 0 10px 0' }}>
+                    {lang === 'ar' ? 'نتيجة تحليل الرابط:' : 'URL analysis result:'} <strong>{label}</strong>
+                  </p>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', margin: '0 0 10px 0' }}>
+                    {lang === 'ar' ? 'حالة نموذج LightGBM:' : 'LightGBM model status:'} {linkMlSource === 'MODEL_UNAVAILABLE'
+                      ? (lang === 'ar' ? 'النموذج غير متاح؛ النتيجة غير محسومة' : 'Model unavailable; verdict is inconclusive')
+                      : linkMl}
+                  </p>
+                  {engines > 0 && (
+                    <div className="details-grid">
+                      <div className="detail-item"><span className="detail-label">{t('result.vtDangerous')}</span><span className="detail-value" style={{ color: 'var(--color-danger)' }}>{vtMalicious}</span></div>
+                      <div className="detail-item"><span className="detail-label">{t('result.vtSuspicious')}</span><span className="detail-value" style={{ color: 'var(--color-warning)' }}>{vtSuspicious}</span></div>
+                      <div className="detail-item"><span className="detail-label">{t('result.vtSafe')}</span><span className="detail-value" style={{ color: 'var(--color-success)' }}>{vtHarmless}</span></div>
+                      <div className="detail-item"><span className="detail-label">{t('result.vtTotal')}</span><span className="detail-value">{engines}</span></div>
                     </div>
-                    <div className="detail-item">
-                      <span className="detail-label">{t('result.vtSuspicious')}</span>
-                      <span className="detail-value" style={{ color: 'var(--color-warning)' }}>{vt.suspicious || 0}</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="detail-label">{t('result.vtSafe')}</span>
-                      <span className="detail-value" style={{ color: 'var(--color-success)' }}>{vt.harmless || 0}</span>
-                    </div>
-                    <div className="detail-item">
-                      <span className="detail-label">{t('result.vtTotal')}</span>
-                      <span className="detail-value">{totalEngines}</span>
-                    </div>
-                  </div>
-                )}
-
-                {ml.classification && (
-                  <div className="ml-body" style={{ background: 'var(--color-bg-subtle)', padding: '10px', borderRadius: '8px' }}>
-                    <div className="ml-stat">
-                      <span className="ml-stat-label">{lang === 'ar' ? 'نموذج LightGBM للرابط:' : 'LightGBM Model:'}</span>
-                      <span className={`ml-stat-badge ml-${(ml.classification || '').toLowerCase()}`}>
-                        {ml.classification === 'SAFE' ? (lang === 'ar' ? 'لم يرصد النموذج مؤشرات' : 'Model detected no indicators') : ml.classification === 'DANGEROUS' ? t('result.mlDangerousBadge') : t('result.mlSuspiciousBadge')}
-                      </span>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
+              );
+            })}
+            {linksNotScannedCount > 0 && (
+              <div className="card details-block" role="alert" style={{ borderInlineStart: '4px solid var(--color-danger)', color: 'var(--color-danger)' }}>
+                {lang === 'ar' ? `لم يُفحص ${linksNotScannedCount} رابط؛ لا تفتح هذه الروابط.` : `${linksNotScannedCount} link(s) were not scanned; do not open them.`}
               </div>
             )}
 

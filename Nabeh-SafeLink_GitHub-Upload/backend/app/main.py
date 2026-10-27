@@ -25,6 +25,7 @@ from app.public.routes import router as public_router
 from app.legal.terms_consent import router as terms_consent_router
 from app.system_settings import SystemSettingsUnavailable, get_system_settings
 from app.observability import configure_logging, elapsed_ms, install_request_id_filter, log_event, reset_request_id, set_request_id
+from app.ml.predictor import get_model_readiness
 
 configure_logging()
 install_request_id_filter()
@@ -164,7 +165,7 @@ def request_id_for_header() -> str:
 @app.get("/health")
 @app.get("/api/v1/health")
 def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "ml_model": get_model_readiness()}
 
 
 # Local production-like mode: one URL serves both the built React app and the API.
