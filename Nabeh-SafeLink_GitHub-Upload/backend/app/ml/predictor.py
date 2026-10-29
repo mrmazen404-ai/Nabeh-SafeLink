@@ -3,6 +3,7 @@
 import os
 import re
 import math
+import json
 import joblib
 from urllib.parse import urlsplit, unquote
 import pandas as pd
@@ -33,6 +34,7 @@ SUSPICIOUS_EXTENSIONS = (
 # Preferred model is retrained LightGBM model, falling back to original model
 RETRAINED_MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model_retrained.joblib")
 ORIGINAL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model.joblib")
+PORTABLE_MODEL_PATH = os.path.join(os.path.dirname(__file__), "nabeh_model_retrained.json")
 MODEL_PATH = RETRAINED_MODEL_PATH if os.path.exists(RETRAINED_MODEL_PATH) else ORIGINAL_MODEL_PATH
 
 model_bundle = None
@@ -63,8 +65,29 @@ def _load_trusted_model():
         model_bundle = loaded
         _model_load_status = "READY"
     except Exception:
-        model_bundle = None
-        _model_load_status = "LOAD_FAILED"
+        # Serverless runtimes can fail to unpickle a LightGBM sklearn wrapper
+        # even when the trained artifact is present. Use the portable dump of
+        # the same trees as a dependency-light production fallback.
+        try:
+            if os.path.abspath(MODEL_PATH) not in {
+                os.path.abspath(RETRAINED_MODEL_PATH),
+                os.path.abspath(ORIGINAL_MODEL_PATH),
+            }:
+                raise ValueError("portable fallback is only for the configured production artifact")
+            with open(PORTABLE_MODEL_PATH, "r", encoding="utf-8") as handle:
+                portable = json.load(handle)
+            if (
+                not isinstance(portable, dict)
+                or not isinstance(portable.get("feature_names"), (list, tuple))
+                or not isinstance(portable.get("tree_info"), list)
+                or not portable["tree_info"]
+            ):
+                raise ValueError("invalid portable model bundle")
+            model_bundle = portable
+            _model_load_status = "READY_PORTABLE"
+        except Exception:
+            model_bundle = None
+            _model_load_status = "LOAD_FAILED"
     return model_bundle
 
 
@@ -80,8 +103,33 @@ def get_model_readiness() -> dict:
         "ARTIFACT_MISSING": "MODEL_ARTIFACT_MISSING",
         "ARTIFACT_INVALID": "MODEL_ARTIFACT_INVALID",
         "LOAD_FAILED": "MODEL_ARTIFACT_LOAD_FAILED",
+        "READY_PORTABLE": "MODEL_READY",
     }.get(_model_load_status, "MODEL_UNAVAILABLE")
     return {"status": "unavailable", "code": code}
+
+
+def _portable_tree_predict(node: dict, values: list[float]) -> float:
+    """Evaluate one binary LightGBM tree from its portable JSON dump."""
+    while "leaf_value" not in node:
+        feature_index = int(node["split_feature"])
+        value = values[feature_index]
+        if math.isnan(value):
+            go_left = bool(node.get("default_left", True))
+        elif node.get("decision_type", "<=") == "<=":
+            go_left = value <= float(node["threshold"])
+        else:
+            go_left = value == float(node["threshold"])
+        node = node["left_child"] if go_left else node["right_child"]
+    return float(node["leaf_value"])
+
+
+def _portable_predict_proba(bundle: dict, values: list[float]) -> float:
+    raw_score = sum(
+        _portable_tree_predict(tree["tree_structure"], values)
+        for tree in bundle["tree_info"]
+    )
+    raw_score = max(-60.0, min(60.0, raw_score))
+    return 1.0 / (1.0 + math.exp(-raw_score))
 
 
 def normalize_url(value: str) -> str:
@@ -303,17 +351,19 @@ def predict_url(url: str) -> dict:
         }
 
     try:
-        model = model_bundle["model"]
         feature_names = model_bundle["feature_names"]
         threshold = model_bundle.get("threshold", 0.425)
-
         features = extract_features(url)
-        df = pd.DataFrame([features])[feature_names]
+        values = [float(features[name]) for name in feature_names]
 
-        probs = model.predict_proba(df)[0]
-        label_map = model_bundle.get("label_mapping", {"good": 0, "bad": 1})
-        bad_idx = label_map.get("bad", 1)
-        phishing_prob = float(probs[bad_idx]) if len(probs) > bad_idx else float(probs[-1])
+        if "model" in model_bundle:
+            df = pd.DataFrame([features])[feature_names]
+            probs = model_bundle["model"].predict_proba(df)[0]
+            label_map = model_bundle.get("label_mapping", {"good": 0, "bad": 1})
+            bad_idx = label_map.get("bad", 1)
+            phishing_prob = float(probs[bad_idx]) if len(probs) > bad_idx else float(probs[-1])
+        else:
+            phishing_prob = _portable_predict_proba(model_bundle, values)
 
         if phishing_prob >= threshold:
             classification = "DANGEROUS" if phishing_prob >= 0.50 else "SUSPICIOUS"
