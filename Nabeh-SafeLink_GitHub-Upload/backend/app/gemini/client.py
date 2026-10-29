@@ -17,7 +17,7 @@ from app.scans.text_rules import analyze_message_indicators
 
 client = None
 _client_api_key = None
-_last_provider_status = {"status": "not_attempted", "provider": None, "error_type": None}
+_last_provider_status = {"status": "not_attempted", "provider": None, "error_type": None, "error_code": None}
 logger = logging.getLogger(__name__)
 
 
@@ -90,10 +90,18 @@ def get_provider_readiness() -> dict:
 
 
 def _set_provider_status(status: str, provider: str | None = None, error: Exception | None = None) -> None:
+    error_code = None
+    if error is not None:
+        for attribute in ("status_code", "code", "status"):
+            value = getattr(error, attribute, None)
+            if value is not None and isinstance(value, (str, int)):
+                error_code = str(value)[:40]
+                break
     _last_provider_status.update({
         "status": status,
         "provider": provider,
         "error_type": safe_error(error) if error else None,
+        "error_code": error_code,
     })
 
 
