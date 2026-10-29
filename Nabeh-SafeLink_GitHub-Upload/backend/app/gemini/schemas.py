@@ -34,6 +34,7 @@ class GeminiExplanation(BaseModel):
 
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
+    classification: Literal["SAFE", "SUSPICIOUS", "DANGEROUS", "UNKNOWN"] = "UNKNOWN"
     summary: str = Field(min_length=1, max_length=600)
     reasons: list[str] = Field(default_factory=list, max_length=5)
     recommendation: str = Field(min_length=1, max_length=500)
@@ -96,6 +97,7 @@ def validate_gemini_payload(payload: Any, *, fallback: dict[str, Any]) -> dict[s
     except Exception:
         # Do not expose validation errors or raw model output to clients/logs.
         safe_fallback = {
+            "classification": fallback.get("classification", "UNKNOWN"),
             "summary": fallback.get("summary", "تعذر التحقق من تفسير الذكاء الاصطناعي."),
             "reasons": fallback.get("reasons", []),
             "recommendation": fallback.get("recommendation", "توخ الحذر وتحقق من المصدر."),

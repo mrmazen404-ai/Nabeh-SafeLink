@@ -406,7 +406,8 @@ class ScanService:
                 },
                 "stage3_gemini": {
                     "name": "Stage 3: Gemini AI URL Threat Research",
-                    "provider": explanation.get("provider", "TEMPLATE"),
+                    "provider": explanation.get("provider", "LOCAL_RULES"),
+                    "classification": explanation.get("classification", "UNKNOWN"),
                     "summary": explanation.get("summary", ""),
                     "recommendation": explanation.get("recommendation", ""),
                 },
@@ -760,7 +761,7 @@ class ScanService:
                     logger.warning("analysis_snapshot_persistence_skipped")
 
                 explanation = scan_res.get("explanation", {})
-                raw_provider = str(explanation.get("provider", "TEMPLATE")).upper()
+                raw_provider = str(explanation.get("provider", "LOCAL_RULES")).upper()
                 if "GEMINI" in raw_provider:
                     provider = "GEMINI"
                 elif "LOCAL" in raw_provider or "RULES" in raw_provider:
@@ -768,9 +769,9 @@ class ScanService:
                 elif "HUMAN" in raw_provider:
                     provider = "HUMAN_REVIEW"
                 elif raw_provider in {"TEMPLATE", "GEMINI", "HUMAN_REVIEW", "LOCAL_RULES"}:
-                    provider = raw_provider
+                    provider = "LOCAL_RULES" if raw_provider == "TEMPLATE" else raw_provider
                 else:
-                    provider = "TEMPLATE"
+                    provider = "LOCAL_RULES"
 
                 explanation_data = {
                     "scan_id": scan_id,

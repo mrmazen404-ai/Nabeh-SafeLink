@@ -146,6 +146,7 @@ Cybersecurity Research Instructions:
 
 Respond ONLY in valid JSON matching this exact structure:
 {{
+  "classification": "SAFE|SUSPICIOUS|DANGEROUS|UNKNOWN",
   "summary": "Clear 1-2 sentence summary explaining the security research findings in {lang_name}",
   "reasons": ["Key technical reason 1 comparing official domain vs URL in {lang_name}", "Key technical reason 2 in {lang_name}", "Key technical reason 3 in {lang_name}"],
   "recommendation": "Practical actionable security advice in {lang_name}",
@@ -679,6 +680,7 @@ def _local_explanation(
     auth_status = "احتيالية (Fake SMS)" if classification == "DANGEROUS" else "مشبوهة (Unverified)" if classification == "SUSPICIOUS" else "رسمية (Official SMS)"
 
     return {
+        "classification": classification,
         "summary": summary,
         "claimed_sender": claimed_sender,
         "official_domain": official_dom_str,
@@ -686,5 +688,5 @@ def _local_explanation(
         "authenticity_status": auth_status,
         "reasons": reasons,
         "recommendation": recommendation,
-        "provider": "TEMPLATE",
+        "provider": "LOCAL_RULES",
     }

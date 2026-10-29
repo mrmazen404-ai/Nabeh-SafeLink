@@ -178,6 +178,11 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
                 </div>
 
                 <p className="explanation-text">{exp.summary}</p>
+                {usesGemini && exp.classification && (
+                  <div className="explanation-text" style={{ marginTop: '10px', fontWeight: 600 }}>
+                    {lang === 'ar' ? 'تصنيف Gemini المساعد: ' : 'Gemini supporting classification: '}{exp.classification}
+                  </div>
+                )}
 
                 {Array.isArray(exp.reasons) && exp.reasons.length > 0 && (
                   <ul className="reasons-list" style={{ marginTop: '16px' }}>
