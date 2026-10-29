@@ -380,8 +380,14 @@ Do not return probability, confidence, or numeric risk scores.
     current_key = _get_api_key()
     gemini_client = _get_client() if current_key else None
 
+    if not current_key:
+        _set_provider_status("not_configured")
+    elif gemini_client is None:
+        _set_provider_status("unavailable")
+
     if gemini_client:
         for model_name in PRIMARY_MODELS:
+            _set_provider_status("attempting")
             log_event(logger, logging.INFO, "gemini_sms_model_attempt_started", operation_id=operation_id, model=model_name)
 
             # Mode 1: Search Grounded Generation for SMS Research
@@ -405,8 +411,10 @@ Do not return probability, confidence, or numeric risk scores.
                 parsed["provider"] = f"GEMINI_SEARCH ({model_name})"
                 parsed = _sanitize_official_portal_url(parsed, text_content, extracted_url)
                 log_event(logger, logging.INFO, "gemini_sms_analysis_succeeded", operation_id=operation_id, model=model_name, mode="search")
+                _set_provider_status("ready", "GEMINI_SEARCH")
                 return parsed
             except Exception as error:
+                _set_provider_status("failed", error=error)
                 log_event(logger, logging.WARNING, "gemini_sms_search_attempt_failed", operation_id=operation_id, model=model_name, error_type=safe_error(error))
                 if _is_rate_limited_error(error):
                     log_event(logger, logging.WARNING, "gemini_sms_rate_limited_fallback", operation_id=operation_id)
@@ -434,8 +442,10 @@ Do not return probability, confidence, or numeric risk scores.
                 parsed["provider"] = f"GEMINI_AI ({model_name})"
                 parsed = _sanitize_official_portal_url(parsed, text_content, extracted_url)
                 log_event(logger, logging.INFO, "gemini_sms_analysis_succeeded", operation_id=operation_id, model=model_name, mode="json")
+                _set_provider_status("ready", "GEMINI")
                 return parsed
             except Exception as error:
+                _set_provider_status("failed", error=error)
                 log_event(logger, logging.WARNING, "gemini_sms_json_attempt_failed", operation_id=operation_id, model=model_name, error_type=safe_error(error))
                 if _is_rate_limited_error(error):
                     log_event(logger, logging.WARNING, "gemini_sms_rate_limited_fallback", operation_id=operation_id)
