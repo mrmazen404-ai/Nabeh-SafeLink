@@ -661,6 +661,7 @@ class ScanService:
                 "stage3_gemini_sms": {
                     "name": "Stage 3: Gemini AI Smishing Threat Research",
                     "provider": ai_analysis.get("provider", "GEMINI_AI"),
+                    "classification": ai_analysis.get("classification", "UNKNOWN"),
                     "summary": ai_analysis.get("summary", ""),
                     "recommendation": ai_analysis.get("recommendation", ""),
                 },

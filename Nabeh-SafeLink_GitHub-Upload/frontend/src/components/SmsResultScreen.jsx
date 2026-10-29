@@ -82,8 +82,10 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
     : (extractedUrl ? [{ url: extractedUrl, classification: result?.classification || 'UNKNOWN', ml_classification: ml.classification, ml_source: ml.source, virustotal: vt }] : []);
   const linksScannedCount = Number(result?.links_scanned_count ?? linkAnalyses.length);
   const linksNotScannedCount = Number(result?.links_not_scanned_count || 0);
+  const provider = String(exp?.provider || result?.source || '').toUpperCase();
+  const usesGemini = provider.includes('GEMINI');
+  const geminiClassification = exp?.classification || result?.stages?.stage3_gemini_sms?.classification || '';
   const providerName = (() => {
-    const provider = String(exp?.provider || result?.source || '').toUpperCase();
     if (provider.includes('LOCAL') || provider.includes('FALLBACK') || provider.includes('RULES')) {
       return lang === 'ar' ? 'تحليل محلي احتياطي' : 'Local fallback analysis';
     }
@@ -139,6 +141,7 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
               </span>
               <span><MailIcon size={14} />{lang === 'ar' ? 'كشف الاستدراج والروابط' : 'Smishing & Lure Audit'}</span>
               <span><SparklesIcon size={14} />{lang === 'ar' ? 'مصادر خارجية عند توفرها' : 'External sources when available'}</span>
+              {usesGemini && <span><SparklesIcon size={14} />Google Gemini</span>}
             </div>
 
             {/* Inspected SMS Content Card */}
@@ -210,6 +213,11 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
               </div>
 
               {exp.summary && <p className="explanation-text" style={{ fontSize: '0.95rem', lineHeight: '1.7' }}>{exp.summary}</p>}
+              {usesGemini && geminiClassification && (
+                <div className="explanation-text" style={{ marginTop: '10px', fontWeight: 600 }}>
+                  {lang === 'ar' ? 'تصنيف Gemini المساعد: ' : 'Gemini supporting classification: '}{geminiClassification}
+                </div>
+              )}
 
               {/* Hoax Claim Verdict Notice */}
               {exp.claim_verdict_explanation && (
