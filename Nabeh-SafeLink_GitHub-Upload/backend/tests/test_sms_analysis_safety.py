@@ -172,8 +172,9 @@ def test_text_scan_timeout_does_not_mark_greeting_safe(monkeypatch):
     assert result["fraud_probability"] is None
 
 
-def test_gemini_429_stops_model_cascade_and_uses_local_fallback(monkeypatch):
+def test_gemini_429_retries_once_then_uses_local_fallback(monkeypatch):
     from app.gemini import client as gemini_client
+    from app.config import settings
 
     class RateLimitedError(Exception):
         status_code = 429
@@ -190,10 +191,12 @@ def test_gemini_429_stops_model_cascade_and_uses_local_fallback(monkeypatch):
     fake_client = SimpleNamespace(aio=SimpleNamespace(models=models))
     monkeypatch.setattr(gemini_client, "_get_api_key", lambda: "test-key")
     monkeypatch.setattr(gemini_client, "_get_client", lambda: fake_client)
+    monkeypatch.setattr(settings, "GEMINI_RATE_LIMIT_BACKOFF_SECONDS", 0.0)
+    monkeypatch.setattr(settings, "GEMINI_RATE_LIMIT_MAX_WAIT_SECONDS", 0.0)
 
     result = asyncio.run(gemini_client.analyze_sms_message("السلام عليكم", language="ar"))
 
-    assert models.calls == 1
+    assert models.calls == 2
     assert result["provider"] == "LOCAL_AI_RULES"
     assert result["classification"] == "UNKNOWN"
 
