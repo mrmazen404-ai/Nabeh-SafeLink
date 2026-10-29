@@ -79,6 +79,14 @@ PRIMARY_MODELS = list(dict.fromkeys(
 ))
 
 
+def get_provider_readiness() -> dict:
+    """Expose only non-secret provider readiness metadata for health checks."""
+    return {
+        "status": "configured" if bool(_get_api_key()) else "not_configured",
+        "model": PRIMARY_MODELS[0] if PRIMARY_MODELS else "unknown",
+    }
+
+
 def _is_rate_limited_error(error: Exception) -> bool:
     """Recognize provider rate limits without relying on error-message text."""
     response = getattr(error, "response", None)
