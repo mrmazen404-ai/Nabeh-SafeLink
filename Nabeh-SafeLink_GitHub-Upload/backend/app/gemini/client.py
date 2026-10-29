@@ -63,18 +63,19 @@ def _get_client():
         client = genai.Client(api_key=current_key)
     return client
 
-# Resilient model cascade. The primary model is configurable so production can
-# select a model enabled for its Google project; the defaults are known stable
-# Gemini API model IDs rather than speculative future names.
+# Resilient model cascade. The configured model is tried first, followed by
+# current production aliases/models. Retired 1.5/2.0 IDs are intentionally
+# excluded because Google returns NOT_FOUND for generateContent on them.
 PRIMARY_MODELS = list(dict.fromkeys(
     model.strip()
     for model in (
         getattr(settings, "GEMINI_MODEL", "")
         or os.getenv("GEMINI_MODEL", "")
         or "gemini-2.5-flash",
+        "gemini-flash-latest",
+        "gemini-3.6-flash",
+        "gemini-2.5-flash-lite",
         "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
     )
     if model and model.strip()
 ))
