@@ -17,6 +17,7 @@ from app.scans.text_rules import analyze_message_indicators
 
 client = None
 _client_api_key = None
+_last_provider_status = {"status": "not_attempted", "provider": None, "error_type": None}
 logger = logging.getLogger(__name__)
 
 
@@ -84,7 +85,16 @@ def get_provider_readiness() -> dict:
     return {
         "status": "configured" if bool(_get_api_key()) else "not_configured",
         "model": PRIMARY_MODELS[0] if PRIMARY_MODELS else "unknown",
+        "last_call": dict(_last_provider_status),
     }
+
+
+def _set_provider_status(status: str, provider: str | None = None, error: Exception | None = None) -> None:
+    _last_provider_status.update({
+        "status": status,
+        "provider": provider,
+        "error_type": safe_error(error) if error else None,
+    })
 
 
 def _is_rate_limited_error(error: Exception) -> bool:
@@ -164,16 +174,19 @@ Respond ONLY in valid JSON matching this exact structure:
 
     current_key = _get_api_key()
     if not current_key:
+        _set_provider_status("not_configured")
         log_event(logger, logging.WARNING, "gemini_provider_not_configured", operation_id=operation_id)
         return _sanitized_local_explanation(classification, language, input_value, evidence)
 
     gemini_client = _get_client()
     if gemini_client is None:
+        _set_provider_status("unavailable")
         log_event(logger, logging.WARNING, "gemini_client_unavailable", operation_id=operation_id)
         return _sanitized_local_explanation(classification, language, input_value, evidence)
 
     # Multi-tier model fallback cascade: iterates through every model until a successful response
     for model_name in PRIMARY_MODELS:
+        _set_provider_status("attempting")
         log_event(logger, logging.INFO, "gemini_model_attempt_started", operation_id=operation_id, model=model_name, mode="search")
 
         # Mode 1: Search Grounded Generation
@@ -202,8 +215,10 @@ Respond ONLY in valid JSON matching this exact structure:
                 evidence=evidence,
             )
             log_event(logger, logging.INFO, "gemini_model_succeeded", operation_id=operation_id, model=model_name, mode="search")
+            _set_provider_status("ready", "GEMINI_SEARCH")
             return result
         except Exception as error:
+            _set_provider_status("failed", error=error)
             log_event(logger, logging.WARNING, "gemini_model_attempt_failed", operation_id=operation_id, model=model_name, mode="search", error_type=safe_error(error))
 
         # Mode 2: Standard Gemini JSON Generation
@@ -234,6 +249,7 @@ Respond ONLY in valid JSON matching this exact structure:
                     evidence=evidence,
                 )
                 log_event(logger, logging.INFO, "gemini_model_succeeded", operation_id=operation_id, model=model_name, mode="json")
+                _set_provider_status("ready", "GEMINI")
                 return result
             except json.JSONDecodeError:
                 if text:
@@ -247,9 +263,11 @@ Respond ONLY in valid JSON matching this exact structure:
                         evidence=evidence,
                     )
                     log_event(logger, logging.INFO, "gemini_model_succeeded", operation_id=operation_id, model=model_name, mode="text_fallback")
+                    _set_provider_status("ready", "GEMINI")
                     return result
 
         except Exception as e:
+            _set_provider_status("failed", error=e)
             log_event(logger, logging.WARNING, "gemini_provider_request_failed", operation_id=operation_id, model=model_name, error_type=safe_error(e))
             continue
 
