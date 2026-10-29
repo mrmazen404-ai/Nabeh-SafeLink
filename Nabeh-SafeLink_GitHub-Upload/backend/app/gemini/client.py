@@ -43,9 +43,13 @@ def _sanitized_local_explanation(classification: str, language: str, input_value
 
 
 def _get_api_key() -> str:
-    if hasattr(settings, "GEMINI_API_KEY") and settings.GEMINI_API_KEY == "":
-        return ""
-    return settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")
+    # Read the live environment as well as the Settings snapshot. This matters
+    # for managed deployments that inject secrets after module initialization.
+    return (
+        getattr(settings, "GEMINI_API_KEY", "")
+        or os.getenv("GEMINI_API_KEY", "")
+        or os.getenv("GOOGLE_API_KEY", "")
+    ).strip()
 
 
 def _get_client():
@@ -58,17 +62,21 @@ def _get_client():
         client = genai.Client(api_key=current_key)
     return client
 
-# Resilient multi-tier model cascade ordered from latest high-speed models to bedrock versions
-PRIMARY_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-flash-latest",
-]
+# Resilient model cascade. The primary model is configurable so production can
+# select a model enabled for its Google project; the defaults are known stable
+# Gemini API model IDs rather than speculative future names.
+PRIMARY_MODELS = list(dict.fromkeys(
+    model.strip()
+    for model in (
+        getattr(settings, "GEMINI_MODEL", "")
+        or os.getenv("GEMINI_MODEL", "")
+        or "gemini-2.5-flash",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+    )
+    if model and model.strip()
+))
 
 
 def _is_rate_limited_error(error: Exception) -> bool:

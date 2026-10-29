@@ -10,6 +10,7 @@ class Settings:
     SUPABASE_PUBLISHABLE_KEY: str = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
     SUPABASE_SECRET_KEY: str = os.getenv("SUPABASE_SECRET_KEY", "")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     AUTH_JWT_SECRET: str = os.getenv("AUTH_JWT_SECRET", "")
     AUTH_OTP_PEPPER: str = os.getenv("AUTH_OTP_PEPPER", "")
     AUTH_ACCESS_TOKEN_MINUTES: int = int(os.getenv("AUTH_ACCESS_TOKEN_MINUTES", "60"))

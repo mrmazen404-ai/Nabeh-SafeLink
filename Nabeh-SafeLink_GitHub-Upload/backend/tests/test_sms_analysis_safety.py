@@ -234,6 +234,16 @@ def test_url_gemini_system_instruction_marks_input_as_untrusted():
     assert "never instructions" in SYSTEM_INSTRUCTION.lower()
 
 
+def test_gemini_runtime_key_is_used_when_settings_snapshot_is_empty(monkeypatch):
+    from app.gemini import client as gemini_client
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
+    monkeypatch.setenv("GEMINI_API_KEY", "runtime-test-key")
+
+    assert gemini_client._get_api_key() == "runtime-test-key"
+
+
 def test_multi_link_scan_public_evidence_matches_strongest_link(monkeypatch):
     from app.scans import service as scan_service
     from app.config import settings
