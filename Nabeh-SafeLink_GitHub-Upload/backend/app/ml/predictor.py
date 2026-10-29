@@ -366,7 +366,7 @@ def predict_url(url: str) -> dict:
             phishing_prob = _portable_predict_proba(model_bundle, values)
 
         if phishing_prob >= threshold:
-            classification = "DANGEROUS" if phishing_prob >= 0.50 else "SUSPICIOUS"
+            classification = "DANGEROUS"
             confidence = phishing_prob
         elif phishing_prob >= (threshold * 0.6):
             classification = "SUSPICIOUS"

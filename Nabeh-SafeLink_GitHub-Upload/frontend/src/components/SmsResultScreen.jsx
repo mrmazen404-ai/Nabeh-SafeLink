@@ -335,8 +335,10 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
 
             {linkAnalyses.map((item, index) => {
               const linkVt = item?.virustotal || {};
-              const linkMl = item?.ml_classification || 'UNKNOWN';
-              const linkMlSource = item?.ml_source || 'N/A';
+              const linkMl = String(item?.ml_classification || 'UNKNOWN').toUpperCase();
+              const linkMlSource = String(item?.ml_source || 'N/A').toUpperCase();
+              const hasUsableLinkMl = linkMlSource === 'ML_MODEL'
+                && ['SAFE', 'SUSPICIOUS', 'DANGEROUS'].includes(linkMl);
               const linkClassification = item?.classification || 'UNKNOWN';
               const engines = Number(linkVt.total_engines || 0);
               const label = linkClassification === 'DANGEROUS'
@@ -360,9 +362,9 @@ export default function SmsResultScreen({ result, onReset, activeTab, setActiveT
                     {lang === 'ar' ? 'نتيجة تحليل الرابط:' : 'URL analysis result:'} <strong>{label}</strong>
                   </p>
                   <p style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', margin: '0 0 10px 0' }}>
-                    {lang === 'ar' ? 'حالة نموذج LightGBM:' : 'LightGBM model status:'} {linkMlSource === 'MODEL_UNAVAILABLE'
-                      ? (lang === 'ar' ? 'النموذج غير متاح؛ النتيجة غير محسومة' : 'Model unavailable; verdict is inconclusive')
-                      : linkMl}
+                    {lang === 'ar' ? 'حالة نموذج LightGBM:' : 'LightGBM model status:'} {hasUsableLinkMl
+                      ? linkMl
+                      : (lang === 'ar' ? 'النموذج غير متاح؛ النتيجة غير محسومة' : 'Model unavailable; verdict is inconclusive')}
                   </p>
                   {engines > 0 && (
                     <div className="details-grid">

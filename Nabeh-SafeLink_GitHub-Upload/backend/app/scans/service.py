@@ -376,9 +376,11 @@ class ScanService:
             except asyncio.TimeoutError:
                 logger.warning("url_gemini_timeout")
                 explanation = cls._local_explanation(combined["classification"], language)
+                explanation["provider"] = "LOCAL_TIMEOUT_FALLBACK"
             except Exception:
                 logger.exception("url_gemini_failed")
                 explanation = cls._local_explanation(combined["classification"], language)
+                explanation["provider"] = "LOCAL_ERROR_FALLBACK"
 
         return {
             "scan_kind": "URL_LINK",
@@ -397,7 +399,7 @@ class ScanService:
                     "source": ml_result.get("source", "N/A"),
                 },
                 "stage2_virustotal": {
-                    "name": "Stage 2: VirusTotal 92+ Engines Intelligence",
+                    "name": "Stage 2: VirusTotal Engine Intelligence",
                     "status": vt_result.get("status", "UNKNOWN"),
                     "malicious": vt_result.get("malicious", 0),
                     "suspicious": vt_result.get("suspicious", 0),

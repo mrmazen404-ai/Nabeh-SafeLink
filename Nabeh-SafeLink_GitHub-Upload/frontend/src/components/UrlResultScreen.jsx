@@ -75,8 +75,9 @@ export default function UrlResultScreen({ result, onReset, activeTab, setActiveT
   const exp = result?.explanation || {};
   const targetUrl = result?.extracted_url || result?.input_value || '';
   const mlSource = String(ml.source || '').toUpperCase();
-  const hasUsableMlResult = Boolean(ml.classification)
-    && !['ML_ERROR', 'MODEL_UNAVAILABLE'].includes(mlSource);
+  const mlClassification = String(ml.classification || '').toUpperCase();
+  const hasUsableMlResult = mlSource === 'ML_MODEL'
+    && ['SAFE', 'SUSPICIOUS', 'DANGEROUS'].includes(mlClassification);
 
   const totalEngines = vt.total_engines || 0;
   const geminiProvider = String(exp.provider || result?.stages?.stage3_gemini?.provider || '').toUpperCase();
