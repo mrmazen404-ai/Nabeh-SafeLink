@@ -458,6 +458,7 @@ class ScanService:
         embedded_url_analyses = await asyncio.gather(
             *(analyze_embedded_url(url) for url in extracted_urls)
         )
+        selected_url = None
         if embedded_url_analyses:
             rank = {"SAFE": 0, "UNKNOWN": 1, "SUSPICIOUS": 2, "DANGEROUS": 3}
             strongest = max(
@@ -465,12 +466,16 @@ class ScanService:
                 key=lambda item: rank.get(str(item["combined"].get("classification", "UNKNOWN")).upper(), 1),
             )
             combined = dict(strongest["combined"])
+            selected_url = strongest["url"]
             if unscanned_url_count and combined.get("classification") == "SAFE":
                 combined.update(classification="UNKNOWN", confidence=None, source="PARTIAL_LINK_ANALYSIS")
             elif len(embedded_url_analyses) > 1:
                 combined["source"] = "MULTIPLE_EMBEDDED_URLS"
-            vt_result = embedded_url_analyses[0]["virustotal"]
-            ml_result = embedded_url_analyses[0]["ml"]
+            # Keep public evidence aligned with the URL that produced the
+            # strongest verdict. Using the first URL here could contradict the
+            # final classification when a later embedded URL was dangerous.
+            vt_result = strongest["virustotal"]
+            ml_result = strongest["ml"]
         else:
             combined = {
                 "classification": "UNKNOWN",
@@ -486,6 +491,7 @@ class ScanService:
             "virustotal": vt_result,
             "input_type": "TEXT",
             "extracted_url": extracted_url,
+            "selected_url": selected_url,
             "embedded_url_analyses": [
                 {
                     "url": item["url"],
@@ -511,14 +517,14 @@ class ScanService:
             logger.warning("scan_total_deadline_settings")
         if not ai_enabled:
             ai_analysis = cls._local_sms_fallback(
-                text_content, extracted_url, combined, language, "LOCAL_FEATURE_DISABLED"
+                text_content, selected_url or extracted_url, combined, language, "LOCAL_FEATURE_DISABLED"
             )
         else:
             try:
                 ai_analysis = await asyncio.wait_for(
                     analyze_sms_message(
                         text_content=text_content,
-                        extracted_url=extracted_url,
+                        extracted_url=selected_url or extracted_url,
                         evidence=evidence,
                         language=language,
                     ),
@@ -527,12 +533,12 @@ class ScanService:
             except asyncio.TimeoutError:
                 logger.warning("sms_gemini_timeout")
                 ai_analysis = cls._local_sms_fallback(
-                    text_content, extracted_url, combined, language, "LOCAL_TIMEOUT_FALLBACK"
+                    text_content, selected_url or extracted_url, combined, language, "LOCAL_TIMEOUT_FALLBACK"
                 )
             except Exception:
                 logger.exception("sms_gemini_failed")
                 ai_analysis = cls._local_sms_fallback(
-                    text_content, extracted_url, combined, language, "LOCAL_ERROR_FALLBACK"
+                    text_content, selected_url or extracted_url, combined, language, "LOCAL_ERROR_FALLBACK"
                 )
 
         local_text = cls.analyze_text_phishing(text_content, bool(extracted_url))
@@ -589,6 +595,7 @@ class ScanService:
             "input_type": "TEXT",
             "input_value": text_content,
             "extracted_url": extracted_url or None,
+            "selected_url": selected_url,
             "extracted_urls": all_extracted_urls,
             "links_scanned_count": len(embedded_url_analyses),
             "links_not_scanned_count": unscanned_url_count,

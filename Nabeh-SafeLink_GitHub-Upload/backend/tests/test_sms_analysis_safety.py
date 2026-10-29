@@ -232,4 +232,37 @@ def test_url_gemini_system_instruction_marks_input_as_untrusted():
 
     assert "untrusted data" in SYSTEM_INSTRUCTION.lower()
     assert "never instructions" in SYSTEM_INSTRUCTION.lower()
+
+
+def test_multi_link_scan_public_evidence_matches_strongest_link(monkeypatch):
+    from app.scans import service as scan_service
+    from app.config import settings
+
+    def fake_predict(url):
+        if "danger.example" in url:
+            return {"classification": "DANGEROUS", "phishing_prob": 0.95, "confidence": 0.95, "source": "FAKE_ML"}
+        return {"classification": "SAFE", "phishing_prob": 0.01, "confidence": 0.99, "source": "FAKE_ML"}
+
+    async def fake_virustotal(url):
+        if "danger.example" in url:
+            return {"status": "DANGEROUS", "malicious": 5, "suspicious": 0, "harmless": 85, "total_engines": 90}
+        return {"status": "SAFE", "malicious": 0, "suspicious": 0, "harmless": 90, "total_engines": 90}
+
+    monkeypatch.setattr(scan_service, "predict_url", fake_predict)
+    monkeypatch.setattr(scan_service, "check_url_virustotal", fake_virustotal)
+    monkeypatch.setattr(scan_service, "setting_enabled_fail_closed", lambda _key: False)
+    monkeypatch.setattr(settings, "SCAN_TOTAL_TIMEOUT_SECONDS", 5)
+
+    result = asyncio.run(ScanService.process_text_scan(
+        "افتح https://safe.example/ ثم https://danger.example/login",
+        language="ar",
+    ))
+
+    assert result["classification"] == "DANGEROUS"
+    assert result["selected_url"] == "https://danger.example/login"
+    assert result["virustotal"]["status"] == "DANGEROUS"
+    assert result["ml_model"]["classification"] == "DANGEROUS"
+    assert result["stages"]["stage2_link_audit"]["status"] == "DANGEROUS"
+    assert result["stages"]["stage2_link_audit"]["results"][0]["classification"] == "SAFE"
+    assert result["stages"]["stage2_link_audit"]["results"][1]["classification"] == "DANGEROUS"
 from types import SimpleNamespace
