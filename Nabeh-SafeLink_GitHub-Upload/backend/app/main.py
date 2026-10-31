@@ -27,6 +27,7 @@ from app.system_settings import SystemSettingsUnavailable, get_system_settings
 from app.observability import configure_logging, elapsed_ms, install_request_id_filter, log_event, reset_request_id, set_request_id
 from app.ml.predictor import get_model_readiness
 from app.gemini.client import get_provider_readiness
+from app.virustotal.client import get_provider_readiness as get_virustotal_readiness
 
 configure_logging()
 install_request_id_filter()
@@ -166,10 +167,14 @@ def request_id_for_header() -> str:
 @app.get("/health")
 @app.get("/api/v1/health")
 def health():
+    ml_readiness = get_model_readiness()
+    virustotal_readiness = get_virustotal_readiness()
     return {
         "status": "healthy",
-        "ml_model": get_model_readiness(),
+        "readiness": "ready" if ml_readiness.get("status") == "ready" and virustotal_readiness.get("status") == "configured" else "degraded",
+        "ml_model": ml_readiness,
         "gemini": get_provider_readiness(),
+        "virustotal": virustotal_readiness,
     }
 
 

@@ -19,9 +19,22 @@ VIRUSTOTAL_BASE_URL = "https://www.virustotal.com/api/v3"
 logger = logging.getLogger(__name__)
 
 
+def _get_api_key() -> str:
+    """Read the current secret so rotations take effect without stale import state."""
+    return os.getenv("VIRUSTOTAL_API_KEY", VIRUSTOTAL_API_KEY).strip()
+
+
+def get_provider_readiness() -> Dict[str, Any]:
+    """Return non-sensitive VirusTotal configuration state for health checks."""
+    return {
+        "status": "configured" if _get_api_key() else "not_configured",
+        "base_url": VIRUSTOTAL_BASE_URL,
+    }
+
+
 def _get_headers() -> Dict[str, str]:
     return {
-        "x-apikey": VIRUSTOTAL_API_KEY,
+        "x-apikey": _get_api_key(),
         "Accept": "application/json",
     }
 
@@ -37,7 +50,7 @@ async def check_url_virustotal(url: str) -> Dict[str, Any]:
     started = time.perf_counter()
     target_id = resource_id(url)
     log_event(logger, logging.INFO, "virustotal_check_started", target_id=target_id)
-    if not VIRUSTOTAL_API_KEY:
+    if not _get_api_key():
         log_event(logger, logging.WARNING, "virustotal_not_configured", target_id=target_id)
         return {
             "status": "UNKNOWN",

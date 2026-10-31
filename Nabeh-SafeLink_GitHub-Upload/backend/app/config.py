@@ -46,6 +46,10 @@ class Settings:
     def validate_admin_security(self) -> None:
         if self.ENVIRONMENT not in {"production", "staging"}:
             return
+        if os.getenv("NABEH_TRUST_MODEL_ARTIFACT", "").lower() not in {"1", "true", "yes"}:
+            raise RuntimeError("NABEH_TRUST_MODEL_ARTIFACT=true is required in production")
+        if not os.getenv("VIRUSTOTAL_API_KEY", "").strip():
+            raise RuntimeError("VIRUSTOTAL_API_KEY is required in production")
         if len(self.ADMIN_JWT_SECRET) < 32:
             raise RuntimeError("ADMIN_JWT_SECRET must be at least 32 characters in production")
         if len(self.ADMIN_BOOTSTRAP_TOKEN) < 32:
